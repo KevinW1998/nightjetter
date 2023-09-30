@@ -149,23 +149,74 @@ class Nightjetter:
         return (avail_level, sparschine, flexschine)
 
 # Protocol some days
-def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, date_start, advance_days=30):
+def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, date_start, advance_days=30, csv_out_price_prefix=None):
     (_, station_from_resl_name) = jetter.findStationId(station_from)
     (_, station_to_resl_name) = jetter.findStationId(station_to)
 
     line_init = ";"
     line_time = str(datetime.now()) + ";"
+
+    results_sparschiene = []
+    results_flexschiene = []
+    avail_cat_types = set()
+
+
     for i in range(advance_days):   
         next_date = date_start + timedelta(days=i)
         line_init += str(next_date) + ";"
         offers = jetter.findOffersFiltered(station_from, station_to, next_date)
         if offers is None:
             line_time += "N" + ";"
+            if csv_out_price_prefix is not None:
+                results_sparschiene.append({})
+                results_flexschiene.append({})
         else:
             (avail_level, sparschine, flexschine) = offers # TODO: protocol prices
+            if csv_out_price_prefix is not None:
+                results_sparschiene.append(sparschine)
+                results_flexschiene.append(flexschine)
+                for cat_type in sparschine:
+                    avail_cat_types.add(cat_type)
+                for cat_type in flexschine:
+                    avail_cat_types.add(cat_type)
             line_time += str(avail_level) + ";"
         print("Processing connection from ", station_from_resl_name , " to ", station_to_resl_name ," at", str(next_date))
     
+    print("Outputting prices by category:")
+    if csv_out_price_prefix is not None:
+        for cat_type in avail_cat_types:
+            fname_sparschiene = csv_out_price_prefix + "-" + cat_type + "-spar.csv"
+            fname_flexschiene = csv_out_price_prefix + "-" + cat_type + "-flex.csv"
+
+            if not os.path.exists(fname_sparschiene):
+                with io.open(fname_sparschiene, "w") as csv_out_file:
+                    csv_out_file.write(line_init + "\n")
+
+            if not os.path.exists(fname_flexschiene):
+                with io.open(fname_flexschiene, "w") as csv_out_file:
+                    csv_out_file.write(line_init + "\n")
+
+            with io.open(fname_sparschiene, "a") as csv_out_file_spar:
+                with io.open(fname_flexschiene, "a") as csv_out_file_flex:
+                    csv_out_file_spar.write(";")
+                    csv_out_file_flex.write(";")
+                    
+                    for i in range(advance_days):
+                        next_entry_sparschiene = results_sparschiene[i]
+                        next_entry_flexschiene = results_flexschiene[i]
+                        if cat_type in next_entry_sparschiene:
+                            csv_out_file_spar.write(str(next_entry_sparschiene[cat_type]) + ";")
+                        else:
+                            csv_out_file_spar.write("N" + ";")
+                        if cat_type in next_entry_flexschiene:
+                            csv_out_file_flex.write(str(next_entry_flexschiene[cat_type]) + ";")
+                        else:
+                            csv_out_file_flex.write("N" + ";")
+                        
+                    
+                    csv_out_file_spar.write("\n")
+                    csv_out_file_flex.write("\n")
+
     if not os.path.exists(csv_out):
         with io.open(csv_out, "w") as csv_out_file:
             csv_out_file.write(line_init + "\n")
@@ -177,9 +228,9 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
 def main():
     jetter = Nightjetter()
 
-    date_start = date(2023, 9, 24)
-    protocol_connection(jetter, "Wien", "Hannover", "wien_hannover.csv", date_start)
-    protocol_connection(jetter, "Hannover", "Wien", "hannover_wien.csv", date_start)
+    date_start = date(2023, 9, 30)
+    protocol_connection(jetter, "Wien", "Hannover", "wien_hannover.csv", date_start, 90, "prices_wien_hannover")
+    protocol_connection(jetter, "Hannover", "Wien", "hannover_wien.csv", date_start, 90, "prices_hannover_wien")
     # jetter.findStationId("Wien")
     # jetter.findStationId("Hannover")
     # print(json.dumps(jetter.findOffers("Hannover-Wien", date(2023, 8, 26)), indent=2))
