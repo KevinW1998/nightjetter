@@ -135,13 +135,13 @@ class Nightjetter:
         
         # Now calc avail level
         avail_level = AVAIL_LEVEL_NONE
-        if "sideCorridorCoach_2" in flexschine or "privateSeat" in flexschine:
+        if "sideCorridorCoach_2" in flexschine or "privateSeat" in flexschine or "centralGangwayCoachComfort_2" in flexschine or "centralGangwayCoachWithTableComfort_2" in flexschine or "serverlyDisabledPerson" in flexschine:
             avail_level = AVAIL_LEVEL_SEAT
-        if "couchette4" in flexschine or "couchette6" in flexschine or "couchette4comfort" in flexschine or "femaleCouchette4" in flexschine or "femaleCouchette6" in flexschine or "femaleCouchette4comfort" in flexschine:
+        if "couchette4" in flexschine or "couchette6" in flexschine or "couchette4comfort" in flexschine or "femaleCouchette4" in flexschine or "femaleCouchette6" in flexschine or "femaleCouchette4comfort" in flexschine or "couchetteMiniSuite" in flexschine:
             avail_level = AVAIL_LEVEL_COUCHETTE
         if "privateCouchette" in flexschine or "privateCouchette4comfort" in flexschine:
             avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE
-        if "single" in flexschine or "singleWithShowerWC" in flexschine or "double" in flexschine or "doubleWithShowerWC" in flexschine:
+        if "single" in flexschine or "singleWithShowerWC" in flexschine or "double" in flexschine or "doubleWithShowerWC" in flexschine or "singleComfort" in flexschine or "doubleComfort" in flexschine or "singleComfortPlus" in flexschine or "doubleComfortPlus":
             if avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE:
                 avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
             else:
@@ -228,9 +228,11 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
 def main():
     jetter = Nightjetter()
 
-    date_start = date(2023, 9, 30)
-    protocol_connection(jetter, "Wien", "Hannover", "wien_hannover.csv", date_start, 90, "prices_wien_hannover")
-    protocol_connection(jetter, "Hannover", "Wien", "hannover_wien.csv", date_start, 90, "prices_hannover_wien")
+    date_start = date(2023, 12, 11)
+    prefix = "output"
+    os.makedirs(prefix, exist_ok=True)
+    protocol_connection(jetter, "Wien", "Hannover", f"{prefix}/wien_hannover.csv", date_start, 180, f"{prefix}/prices_wien_hannover")
+    protocol_connection(jetter, "Hannover", "Wien", f"{prefix}/hannover_wien.csv", date_start, 180, f"{prefix}/prices_hannover_wien")
     # jetter.findStationId("Wien")
     # jetter.findStationId("Hannover")
     # print(json.dumps(jetter.findOffers("Hannover-Wien", date(2023, 8, 26)), indent=2))
