@@ -27,14 +27,15 @@ class Nightjetter:
         sessionCookie = response.cookies.get("SESSION")
         self.__session.cookies.set("SESSION", sessionCookie)
         self.__session.headers["X-Public-ID"] = content["publicId"]
+        self.__session.headers["X-Token"] = content["token"]
 
         # Get token
-        response = self.__session.post(
-            "https://www.nightjet.com/nj-booking/init/token",
-            json={"action": "get", "lang": "de"}
-        )
-        content = response.json()
-        self.__session.headers["CSRF-Token"] = content["CSRF-Token"]
+        # response = self.__session.post(
+        #     "https://www.nightjet.com/nj-booking/init/token",
+        #     json={"action": "get", "lang": "de"}
+        # )
+        # content = response.json()
+        # self.__session.headers["CSRF-Token"] = content["CSRF-Token"]
 
     def findStationId(self, name):
         stations = self.__session.get(f"https://www.nightjet.com/nj-booking/stations/find?lang=de&country=at&name={name}") 
@@ -177,7 +178,7 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
 def main():
     jetter = Nightjetter()
 
-    date_start = date(2023, 9, 24)
+    date_start = date(2023, 12, 11)
     protocol_connection(jetter, "Wien", "Hannover", "wien_hannover.csv", date_start)
     protocol_connection(jetter, "Hannover", "Wien", "hannover_wien.csv", date_start)
     # jetter.findStationId("Wien")
