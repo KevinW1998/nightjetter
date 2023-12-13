@@ -84,6 +84,12 @@ class Nightjetter:
                     "gender": "male",
                     "birthDate": "1993-06-16",
                     "cards": [100000042] # 100000042 = Klimaticket
+                },
+                {
+                    "type": "person",
+                    "gender": "female",
+                    "birthDate": "1993-06-16",
+                    "cards": [100000042] # 100000042 = Klimaticket
                 }
             ],
             "relations": [],
@@ -114,7 +120,7 @@ class Nightjetter:
             is_spar = False
             if "nightjetSparschiene" in offer["prodGroupLabels"]:
                 is_spar = True
-            elif "komfortticketStorno" not in offer["prodGroupLabels"]:
+            elif "Vollstorno" not in offer["prodGroupLabels"]:
                 continue
             
             compartments = offer["reservation"]["reservationSegments"][0]["compartments"]
@@ -234,9 +240,9 @@ def main():
     os.makedirs(prefix, exist_ok=True)
     protocol_connection(jetter, "Wien", "Hannover", f"{prefix}/wien_hannover.csv", date_start, 180, f"{prefix}/prices_wien_hannover")
     protocol_connection(jetter, "Hannover", "Wien", f"{prefix}/hannover_wien.csv", date_start, 180, f"{prefix}/prices_hannover_wien")
-    # jetter.findStationId("Wien")
-    # jetter.findStationId("Hannover")
-    # print(json.dumps(jetter.findOffers("Hannover-Wien", date(2023, 8, 26)), indent=2))
+    # (wienID, _) = jetter.findStationId("Wien")
+    # (hannoverID, _) = jetter.findStationId("Hannover")
+    # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
 
     
 
