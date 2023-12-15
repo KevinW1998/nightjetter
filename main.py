@@ -115,11 +115,15 @@ class Nightjetter:
             return None
         
         sparschine = {}
+        komfortschiene = {}
         flexschine = {}
         for offer in offers:
             is_spar = False
-            if "nightjetSparschiene" in offer["prodGroupLabels"]:
+            is_komfort = False
+            if "Kein Storno" in offer["prodGroupLabels"]:
                 is_spar = True
+            elif "komfortticketStorno" in offer["prodGroupLabels"]:
+                is_komfort = True
             elif "Vollstorno" not in offer["prodGroupLabels"]:
                 continue
             
@@ -137,6 +141,8 @@ class Nightjetter:
                     total_price += obj_entry["price"]
                 if is_spar:
                     sparschine[comp_identifier] = total_price
+                elif is_komfort:
+                    komfortschiene[comp_identifier] = total_price
                 else:
                     flexschine[comp_identifier] = total_price
         
@@ -153,7 +159,7 @@ class Nightjetter:
                 avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
             else:
                 avail_level = AVAIL_LEVEL_BED
-        return (avail_level, sparschine, flexschine)
+        return (avail_level, sparschine, komfortschiene, flexschine)
 
 # Protocol some days
 def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, date_start, advance_days=30, csv_out_price_prefix=None):
@@ -164,6 +170,7 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
     line_time = str(datetime.now()) + ";"
 
     results_sparschiene = []
+    results_komfortschiene = []
     results_flexschiene = []
     avail_cat_types = set()
 
@@ -176,13 +183,17 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
             line_time += "N" + ";"
             if csv_out_price_prefix is not None:
                 results_sparschiene.append({})
+                results_komfortschiene.append({})
                 results_flexschiene.append({})
         else:
-            (avail_level, sparschine, flexschine) = offers # TODO: protocol prices
+            (avail_level, sparschine, komfortschiene, flexschine) = offers # TODO: protocol prices
             if csv_out_price_prefix is not None:
                 results_sparschiene.append(sparschine)
+                results_komfortschiene.append(komfortschiene)
                 results_flexschiene.append(flexschine)
                 for cat_type in sparschine:
+                    avail_cat_types.add(cat_type)
+                for cat_type in komfortschiene:
                     avail_cat_types.add(cat_type)
                 for cat_type in flexschine:
                     avail_cat_types.add(cat_type)
@@ -193,36 +204,48 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
     if csv_out_price_prefix is not None:
         for cat_type in avail_cat_types:
             fname_sparschiene = csv_out_price_prefix + "-" + cat_type + "-spar.csv"
+            fname_komfortschiene = csv_out_price_prefix + "-" + cat_type + "-komf.csv"
             fname_flexschiene = csv_out_price_prefix + "-" + cat_type + "-flex.csv"
 
             if not os.path.exists(fname_sparschiene):
                 with io.open(fname_sparschiene, "w") as csv_out_file:
                     csv_out_file.write(line_init + "\n")
-
+            
+            if not os.path.exists(fname_komfortschiene):
+                with io.open(fname_komfortschiene, "w") as csv_out_file:
+                    csv_out_file.write(line_init + "\n")
+            
             if not os.path.exists(fname_flexschiene):
                 with io.open(fname_flexschiene, "w") as csv_out_file:
                     csv_out_file.write(line_init + "\n")
 
             with io.open(fname_sparschiene, "a") as csv_out_file_spar:
-                with io.open(fname_flexschiene, "a") as csv_out_file_flex:
-                    csv_out_file_spar.write(";")
-                    csv_out_file_flex.write(";")
-                    
-                    for i in range(advance_days):
-                        next_entry_sparschiene = results_sparschiene[i]
-                        next_entry_flexschiene = results_flexschiene[i]
-                        if cat_type in next_entry_sparschiene:
-                            csv_out_file_spar.write(str(next_entry_sparschiene[cat_type]) + ";")
-                        else:
-                            csv_out_file_spar.write("N" + ";")
-                        if cat_type in next_entry_flexschiene:
-                            csv_out_file_flex.write(str(next_entry_flexschiene[cat_type]) + ";")
-                        else:
-                            csv_out_file_flex.write("N" + ";")
+                with io.open(fname_komfortschiene, "a") as csv_out_file_komf:
+                    with io.open(fname_flexschiene, "a") as csv_out_file_flex:
+                        csv_out_file_spar.write(";")
+                        csv_out_file_komf.write(";")
+                        csv_out_file_flex.write(";")
                         
-                    
-                    csv_out_file_spar.write("\n")
-                    csv_out_file_flex.write("\n")
+                        for i in range(advance_days):
+                            next_entry_sparschiene = results_sparschiene[i]
+                            next_entry_komfortschiene = results_komfortschiene[i]
+                            next_entry_flexschiene = results_flexschiene[i]
+                            if cat_type in next_entry_sparschiene:
+                                csv_out_file_spar.write(str(next_entry_sparschiene[cat_type]) + ";")
+                            else:
+                                csv_out_file_spar.write("N" + ";")
+                            if cat_type in next_entry_komfortschiene:
+                                csv_out_file_komf.write(str(next_entry_komfortschiene[cat_type]) + ";")
+                            else:
+                                csv_out_file_komf.write("N" + ";")
+                            if cat_type in next_entry_flexschiene:
+                                csv_out_file_flex.write(str(next_entry_flexschiene[cat_type]) + ";")
+                            else:
+                                csv_out_file_flex.write("N" + ";")
+                            
+                        
+                        csv_out_file_spar.write("\n")
+                        csv_out_file_flex.write("\n")
 
     if not os.path.exists(csv_out):
         with io.open(csv_out, "w") as csv_out_file:
