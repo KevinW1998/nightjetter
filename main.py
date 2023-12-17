@@ -245,6 +245,7 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
                             
                         
                         csv_out_file_spar.write("\n")
+                        csv_out_file_komf.write("\n")
                         csv_out_file_flex.write("\n")
 
     if not os.path.exists(csv_out):
