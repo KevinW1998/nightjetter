@@ -1,6 +1,5 @@
 import requests
-import json
-from datetime import date, datetime,timedelta
+from datetime import date, datetime, timedelta
 import os
 import io
 
@@ -53,12 +52,14 @@ class Nightjetter:
         # print(f"Target: {repr(target)}")
         return (target["number"], target["name"])
 
-    def findOffers(self, station_from, station_to, day: datetime.date):        
+    def findOffers(self, station_from, station_to, day: datetime.date, passengers):        
         (station_from_id, _) = self.findStationId(station_from)
         (station_to_id, _) = self.findStationId(station_to)
         
-        fmt_date = "%02d%02d%04d" % (day.day,day.month,day.year)
-        connections = self.__session.get(f"https://www.nightjet.com/nj-booking/connection/find/{str(station_from_id)}/{str(station_to_id)}/{fmt_date}/00:00?skip=0&limit=1&backward=false&lang=de")
+        fmt_date = day.strftime('%d%m%Y')
+        url_prefix = "https://www.nightjet.com/nj-booking/connection/find"
+        url_suffix = "00:00?skip=0&limit=1&backward=false&lang=de"
+        connections = self.__session.get(f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}/{url_suffix}")
         connections_json = connections.json()
         connections_results = connections_json["results"]
         if len(connections_results) <= 0:
@@ -78,20 +79,7 @@ class Nightjetter:
                 "njTrain": target_train,
                 "njDeparture": departure_time
             },
-            "objects": [
-                {
-                    "type": "person",
-                    "gender": "male",
-                    "birthDate": "1993-06-16",
-                    "cards": [100000042] # 100000042 = Klimaticket
-                },
-                {
-                    "type": "person",
-                    "gender": "female",
-                    "birthDate": "1993-06-16",
-                    "cards": [100000042] # 100000042 = Klimaticket
-                }
-            ],
+            "objects": passengers,
             "relations": [],
             "lang": "de"
         }
@@ -109,14 +97,14 @@ class Nightjetter:
         first_connection = first_result["connections"][0]
         return first_connection["offers"]
     
-    def findOffersFiltered(self, station_from, station_to, day: datetime.date):
-        offers = self.findOffers(station_from, station_to, day)
+    def findOffersFiltered(self, station_from, station_to, day: datetime.date, passengers):
+        offers = self.findOffers(station_from, station_to, day, passengers)
         if offers is None:
             return None
         
-        sparschine = {}
+        sparschiene = {}
         komfortschiene = {}
-        flexschine = {}
+        flexschiene = {}
         for offer in offers:
             is_spar = False
             is_komfort = False
@@ -140,34 +128,48 @@ class Nightjetter:
                 for obj_entry in compartment_object:
                     total_price += obj_entry["price"]
                 if is_spar:
-                    sparschine[comp_identifier] = total_price
+                    sparschiene[comp_identifier] = total_price
                 elif is_komfort:
                     komfortschiene[comp_identifier] = total_price
                 else:
-                    flexschine[comp_identifier] = total_price
+                    flexschiene[comp_identifier] = total_price
         
         # Now calc avail level
         avail_level = AVAIL_LEVEL_NONE
-        if "sideCorridorCoach_2" in flexschine or "privateSeat" in flexschine or "centralGangwayCoachComfort_2" in flexschine or "centralGangwayCoachWithTableComfort_2" in flexschine or "serverlyDisabledPerson" in flexschine:
+        if "sideCorridorCoach_2" in flexschiene or "privateSeat" in flexschiene or "centralGangwayCoachComfort_2" in flexschiene or "centralGangwayCoachWithTableComfort_2" in flexschiene or "serverlyDisabledPerson" in flexschiene:
             avail_level = AVAIL_LEVEL_SEAT
-        if "couchette4" in flexschine or "couchette6" in flexschine or "couchette4comfort" in flexschine or "femaleCouchette4" in flexschine or "femaleCouchette6" in flexschine or "femaleCouchette4comfort" in flexschine or "couchetteMiniSuite" in flexschine:
+        if "couchette4" in flexschiene or "couchette6" in flexschiene or "couchette4comfort" in flexschiene or "femaleCouchette4" in flexschiene or "femaleCouchette6" in flexschiene or "femaleCouchette4comfort" in flexschiene or "couchetteMiniSuite" in flexschiene:
             avail_level = AVAIL_LEVEL_COUCHETTE
-        if "privateCouchette" in flexschine or "privateCouchette4comfort" in flexschine:
+        if "privateCouchette" in flexschiene or "privateCouchette4comfort" in flexschiene:
             avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE
-        if "single" in flexschine or "singleWithShowerWC" in flexschine or "double" in flexschine or "doubleWithShowerWC" in flexschine or "singleComfort" in flexschine or "doubleComfort" in flexschine or "singleComfortPlus" in flexschine or "doubleComfortPlus":
+        if "single" in flexschiene or "singleWithShowerWC" in flexschiene or "double" in flexschiene or "doubleWithShowerWC" in flexschiene or "singleComfort" in flexschiene or "doubleComfort" in flexschiene or "singleComfortPlus" in flexschiene or "doubleComfortPlus":
             if avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE:
                 avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
             else:
                 avail_level = AVAIL_LEVEL_BED
-        return (avail_level, sparschine, komfortschiene, flexschine)
+        return (avail_level, sparschiene, komfortschiene, flexschiene)
+
+
+def init_file(filename: str, header: str) -> None:
+    if not os.path.exists(filename):
+        with io.open(filename, "w") as csv_out_file:
+            csv_out_file.write(f"{header}\n")
+
 
 # Protocol some days
-def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, date_start, advance_days=30, csv_out_price_prefix=None):
+def protocol_connection(jetter: Nightjetter, station_from, station_to, date_start, advance_days=30, passengers=[]):
+
+    prefix = "output"
+    os.makedirs(prefix, exist_ok=True)
+    csv_out = f"{prefix}/{station_from}_{station_to}.csv"
+    # TODO: add option to skip prices output
+    csv_out_price_prefix = f"{prefix}/prices_{station_from}_{station_to}"
+
     (_, station_from_resl_name) = jetter.findStationId(station_from)
     (_, station_to_resl_name) = jetter.findStationId(station_to)
 
     line_init = ";"
-    line_time = str(datetime.now()) + ";"
+    line_time = f"{datetime.now()};"
 
     results_sparschiene = []
     results_komfortschiene = []
@@ -177,98 +179,97 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, csv_out, 
 
     for i in range(advance_days):   
         next_date = date_start + timedelta(days=i)
-        line_init += str(next_date) + ";"
-        offers = jetter.findOffersFiltered(station_from, station_to, next_date)
+        line_init += f"{next_date};"
+        offers = jetter.findOffersFiltered(station_from, station_to, next_date, passengers)
         if offers is None:
-            line_time += "N" + ";"
+            line_time += "N;"
             if csv_out_price_prefix is not None:
                 results_sparschiene.append({})
                 results_komfortschiene.append({})
                 results_flexschiene.append({})
         else:
-            (avail_level, sparschine, komfortschiene, flexschine) = offers # TODO: protocol prices
+            (avail_level, sparschiene, komfortschiene, flexschiene) = offers  # TODO: protocol prices
             if csv_out_price_prefix is not None:
-                results_sparschiene.append(sparschine)
+                results_sparschiene.append(sparschiene)
                 results_komfortschiene.append(komfortschiene)
-                results_flexschiene.append(flexschine)
-                for cat_type in sparschine:
-                    avail_cat_types.add(cat_type)
-                for cat_type in komfortschiene:
-                    avail_cat_types.add(cat_type)
-                for cat_type in flexschine:
-                    avail_cat_types.add(cat_type)
-            line_time += str(avail_level) + ";"
-        print("Processing connection from ", station_from_resl_name , " to ", station_to_resl_name ," at", str(next_date))
+                results_flexschiene.append(flexschiene)
+                avail_cat_types.update(sparschiene.keys())
+                avail_cat_types.update(komfortschiene.keys())
+                avail_cat_types.update(flexschiene.keys())
+            line_time += f"{avail_level};"
+        print(f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}")
     
     print("Outputting prices by category:")
     if csv_out_price_prefix is not None:
         for cat_type in avail_cat_types:
-            fname_sparschiene = csv_out_price_prefix + "-" + cat_type + "-spar.csv"
-            fname_komfortschiene = csv_out_price_prefix + "-" + cat_type + "-komf.csv"
-            fname_flexschiene = csv_out_price_prefix + "-" + cat_type + "-flex.csv"
+            fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
+            fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
+            fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
 
-            if not os.path.exists(fname_sparschiene):
-                with io.open(fname_sparschiene, "w") as csv_out_file:
-                    csv_out_file.write(line_init + "\n")
-            
-            if not os.path.exists(fname_komfortschiene):
-                with io.open(fname_komfortschiene, "w") as csv_out_file:
-                    csv_out_file.write(line_init + "\n")
-            
-            if not os.path.exists(fname_flexschiene):
-                with io.open(fname_flexschiene, "w") as csv_out_file:
-                    csv_out_file.write(line_init + "\n")
+            for filename in (fname_flexschiene, fname_komfortschiene, fname_sparschiene):
+                init_file(filename=filename, header=line_init)
 
-            with io.open(fname_sparschiene, "a") as csv_out_file_spar:
-                with io.open(fname_komfortschiene, "a") as csv_out_file_komf:
-                    with io.open(fname_flexschiene, "a") as csv_out_file_flex:
-                        csv_out_file_spar.write(";")
-                        csv_out_file_komf.write(";")
-                        csv_out_file_flex.write(";")
-                        
-                        for i in range(advance_days):
-                            next_entry_sparschiene = results_sparschiene[i]
-                            next_entry_komfortschiene = results_komfortschiene[i]
-                            next_entry_flexschiene = results_flexschiene[i]
-                            if cat_type in next_entry_sparschiene:
-                                csv_out_file_spar.write(str(next_entry_sparschiene[cat_type]) + ";")
-                            else:
-                                csv_out_file_spar.write("N" + ";")
-                            if cat_type in next_entry_komfortschiene:
-                                csv_out_file_komf.write(str(next_entry_komfortschiene[cat_type]) + ";")
-                            else:
-                                csv_out_file_komf.write("N" + ";")
-                            if cat_type in next_entry_flexschiene:
-                                csv_out_file_flex.write(str(next_entry_flexschiene[cat_type]) + ";")
-                            else:
-                                csv_out_file_flex.write("N" + ";")
-                            
-                        
-                        csv_out_file_spar.write("\n")
-                        csv_out_file_komf.write("\n")
-                        csv_out_file_flex.write("\n")
+            # Python 3.10+ only syntax
+            with (
+                io.open(fname_sparschiene, "a") as csv_out_file_spar,
+                io.open(fname_komfortschiene, "a") as csv_out_file_komf,
+                io.open(fname_flexschiene, "a") as csv_out_file_flex,
+            ):
+                csv_out_file_spar.write(";")
+                csv_out_file_komf.write(";")
+                csv_out_file_flex.write(";")
+                
+                for i in range(advance_days):
+                    next_entry_sparschiene = results_sparschiene[i]
+                    next_entry_komfortschiene = results_komfortschiene[i]
+                    next_entry_flexschiene = results_flexschiene[i]
+                    if cat_type in next_entry_sparschiene:
+                        csv_out_file_spar.write(f"{next_entry_sparschiene[cat_type]};")
+                    else:
+                        csv_out_file_spar.write("N;")
+                    if cat_type in next_entry_komfortschiene:
+                        csv_out_file_komf.write(f"{next_entry_komfortschiene[cat_type]};")
+                    else:
+                        csv_out_file_komf.write("N;")
+                    if cat_type in next_entry_flexschiene:
+                        csv_out_file_flex.write(f"{next_entry_flexschiene[cat_type]};")
+                    else:
+                        csv_out_file_flex.write("N;")
+                
+                csv_out_file_spar.write("\n")
+                csv_out_file_komf.write("\n")
+                csv_out_file_flex.write("\n")
 
-    if not os.path.exists(csv_out):
-        with io.open(csv_out, "w") as csv_out_file:
-            csv_out_file.write(line_init + "\n")
-
+    init_file(filename=csv_out, header=line_init)
     with io.open(csv_out, "a") as csv_out_file:
-        csv_out_file.write(line_time + "\n")
+        csv_out_file.write(f"{line_time}\n")
 
 
 def main():
     jetter = Nightjetter()
 
-    date_start = date(2023, 12, 11)
-    prefix = "output"
-    os.makedirs(prefix, exist_ok=True)
-    protocol_connection(jetter, "Wien", "Hannover", f"{prefix}/wien_hannover.csv", date_start, 180, f"{prefix}/prices_wien_hannover")
-    protocol_connection(jetter, "Hannover", "Wien", f"{prefix}/hannover_wien.csv", date_start, 180, f"{prefix}/prices_hannover_wien")
+    date_start = date(2024, 3, 15)
+    station_from = "Berlin"
+    station_to = "Paris"
+    passengers = [
+        {
+            "type": "person",
+            "gender": "male",
+            "birthDate": "1993-06-16",
+            "cards": [100000042] # 100000042 = Klimaticket
+        },
+        {
+            "type": "person",
+            "gender": "female",
+            "birthDate": "1993-06-16",
+            "cards": [100000042] # 100000042 = Klimaticket
+        }
+    ]
+
+    protocol_connection(jetter, station_from, station_to, date_start, 30, passengers)
     # (wienID, _) = jetter.findStationId("Wien")
     # (hannoverID, _) = jetter.findStationId("Hannover")
     # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
-
-    
 
 
 if __name__ == '__main__':
