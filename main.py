@@ -11,22 +11,45 @@ AVAIL_LEVEL_BED = 4
 AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED = 5
 
 level_mapping = {
-    AVAIL_LEVEL_SEAT: ["sideCorridorCoach_2", "privateSeat", "centralGangwayCoachComfort_2", "centralGangwayCoachWithTableComfort_2", "serverlyDisabledPerson"],
-    AVAIL_LEVEL_COUCHETTE: ["couchette4", "couchette6", "couchette4comfort", "femaleCouchette4", "femaleCouchette6", "femaleCouchette4comfort", "couchetteMiniSuite"],
-    AVAIL_LEVEL_PRIVATE_COUCHETTE: ["privateCouchette", "privateCouchette4comfort"],
-    AVAIL_LEVEL_BED: ["single", "singleWithShowerWC", "double", "doubleWithShowerWC", "singleComfort", "doubleComfort", "singleComfortPlus", "doubleComfortPlus"],
+    AVAIL_LEVEL_SEAT: {
+        "sideCorridorCoach_2",
+        "privateSeat",
+        "centralGangwayCoachComfort_2",
+        "centralGangwayCoachWithTableComfort_2",
+        "serverlyDisabledPerson",
+    },
+    AVAIL_LEVEL_COUCHETTE: {
+        "couchette4",
+        "couchette6",
+        "couchette4comfort",
+        "femaleCouchette4",
+        "femaleCouchette6",
+        "femaleCouchette4comfort",
+        "couchetteMiniSuite",
+    },
+    AVAIL_LEVEL_PRIVATE_COUCHETTE: {"privateCouchette", "privateCouchette4comfort"},
+    AVAIL_LEVEL_BED: {
+        "single",
+        "singleWithShowerWC",
+        "double",
+        "doubleWithShowerWC",
+        "singleComfort",
+        "doubleComfort",
+        "singleComfortPlus",
+        "doubleComfortPlus",
+    },
 }
+
 
 class Nightjetter:
     def __init__(self) -> None:
         self.__session = requests.Session()
         self.__session.headers = {
             "Accept": "application/json",
-            "Referer": "https://www.nightjet.com/de/ticket-buchen"
+            "Referer": "https://www.nightjet.com/de/ticket-buchen",
         }
         response = self.__session.post(
-            "https://www.nightjet.com/nj-booking/init/start",
-            json={"lang": "de"}
+            "https://www.nightjet.com/nj-booking/init/start", json={"lang": "de"}
         )
         content = response.json()
         sessionCookie = response.cookies.get("SESSION")
@@ -43,7 +66,9 @@ class Nightjetter:
         # self.__session.headers["CSRF-Token"] = content["CSRF-Token"]
 
     def findStationId(self, name):
-        stations = self.__session.get(f"https://www.nightjet.com/nj-booking/stations/find?lang=de&country=at&name={name}") 
+        stations = self.__session.get(
+            f"https://www.nightjet.com/nj-booking/stations/find?lang=de&country=at&name={name}"
+        )
         stations_json = stations.json()
         # find first non-meta
         target = None
@@ -58,14 +83,16 @@ class Nightjetter:
         # print(f"Target: {repr(target)}")
         return (target["number"], target["name"])
 
-    def findOffers(self, station_from, station_to, day: datetime.date, passengers):        
+    def findOffers(self, station_from, station_to, day: datetime.date, passengers):
         (station_from_id, _) = self.findStationId(station_from)
         (station_to_id, _) = self.findStationId(station_to)
-        
-        fmt_date = day.strftime('%d%m%Y')
+
+        fmt_date = day.strftime("%d%m%Y")
         url_prefix = "https://www.nightjet.com/nj-booking/connection/find"
         url_suffix = "00:00?skip=0&limit=1&backward=false&lang=de"
-        connections = self.__session.get(f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}/{url_suffix}")
+        connections = self.__session.get(
+            f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}/{url_suffix}"
+        )
         connections_json = connections.json()
         connections_results = connections_json["results"]
         if len(connections_results) <= 0:
@@ -81,18 +108,14 @@ class Nightjetter:
             "njDep": departure_time,
             "njTo": station_to_id,
             "maxChanges": 0,
-            "filter": {
-                "njTrain": target_train,
-                "njDeparture": departure_time
-            },
+            "filter": {"njTrain": target_train, "njDeparture": departure_time},
             "objects": passengers,
             "relations": [],
-            "lang": "de"
+            "lang": "de",
         }
-        
+
         response = self.__session.post(
-            "https://www.nightjet.com/nj-booking/offer/get",
-            json=jsonBody
+            "https://www.nightjet.com/nj-booking/offer/get", json=jsonBody
         )
 
         content = response.json()
@@ -102,12 +125,14 @@ class Nightjetter:
         first_result = content["result"][0]
         first_connection = first_result["connections"][0]
         return first_connection["offers"]
-    
-    def findOffersFiltered(self, station_from, station_to, day: datetime.date, passengers):
+
+    def findOffersFiltered(
+        self, station_from, station_to, day: datetime.date, passengers
+    ):
         offers = self.findOffers(station_from, station_to, day, passengers)
         if offers is None:
             return None
-        
+
         sparschiene = {}
         komfortschiene = {}
         flexschiene = {}
@@ -120,14 +145,16 @@ class Nightjetter:
                 is_komfort = True
             elif "Vollstorno" not in offer["prodGroupLabels"]:
                 continue
-            
-            compartments = offer["reservation"]["reservationSegments"][0]["compartments"]
+
+            reservation_segments = offer["reservation"]["reservationSegments"]
+            compartments = reservation_segments[0]["compartments"]
             for compartment in compartments:
                 comp_identifier = compartment["externalIdentifier"]
                 # print(comp_identifier)
                 compartment_object = None
                 if "privateVariations" in compartment:
-                    compartment_object = compartment["privateVariations"][0]["allocations"][0]["objects"]
+                    allocations = compartment["privateVariations"][0]["allocations"]
+                    compartment_object = allocations[0]["objects"]
                 else:
                     compartment_object = compartment["objects"]
                 total_price = 0
@@ -139,12 +166,15 @@ class Nightjetter:
                     komfortschiene[comp_identifier] = total_price
                 else:
                     flexschiene[comp_identifier] = total_price
-        
+
         # Now calc avail level
         avail_level = AVAIL_LEVEL_NONE
-        for level, comp_identifier_list in level_mapping.items():
-            if any(comp_identifier_list) in flexschiene:
-                if level == AVAIL_LEVEL_BED and avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE:
+        for level, comp_identifier_set in level_mapping.items():
+            if comp_identifier_set & set(flexschiene):
+                if (
+                    level == AVAIL_LEVEL_BED
+                    and avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE
+                ):
                     avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
                 else:
                     avail_level = level
@@ -158,8 +188,14 @@ def init_file(filename: str, header: str) -> None:
 
 
 # Protocol some days
-def protocol_connection(jetter: Nightjetter, station_from, station_to, date_start, advance_days=30, passengers=[]):
-
+def protocol_connection(
+    jetter: Nightjetter,
+    station_from,
+    station_to,
+    date_start,
+    advance_days=30,
+    passengers=[],
+):
     prefix = "output"
     os.makedirs(prefix, exist_ok=True)
     csv_out = f"{prefix}/{station_from}_{station_to}.csv"
@@ -177,11 +213,12 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
     results_flexschiene = []
     avail_cat_types = set()
 
-
-    for i in range(advance_days):   
+    for i in range(advance_days):
         next_date = date_start + timedelta(days=i)
         line_init += f"{next_date};"
-        offers = jetter.findOffersFiltered(station_from, station_to, next_date, passengers)
+        offers = jetter.findOffersFiltered(
+            station_from, station_to, next_date, passengers
+        )
         if offers is None:
             line_time += "N;"
             if csv_out_price_prefix is not None:
@@ -189,7 +226,12 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
                 results_komfortschiene.append({})
                 results_flexschiene.append({})
         else:
-            (avail_level, sparschiene, komfortschiene, flexschiene) = offers  # TODO: protocol prices
+            (
+                avail_level,
+                sparschiene,
+                komfortschiene,
+                flexschiene,
+            ) = offers  # TODO: protocol prices
             if csv_out_price_prefix is not None:
                 results_sparschiene.append(sparschiene)
                 results_komfortschiene.append(komfortschiene)
@@ -198,8 +240,10 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
                 avail_cat_types.update(komfortschiene.keys())
                 avail_cat_types.update(flexschiene.keys())
             line_time += f"{avail_level};"
-        print(f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}")
-    
+        print(
+            f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}"
+        )
+
     if csv_out_price_prefix is not None:
         print("Outputting prices by category")
         for cat_type in avail_cat_types:
@@ -207,8 +251,8 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
             fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
             fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
 
-            for filename in (fname_flexschiene, fname_komfortschiene, fname_sparschiene):
-                init_file(filename=filename, header=line_init)
+            for fname in (fname_flexschiene, fname_komfortschiene, fname_sparschiene):
+                init_file(filename=fname, header=line_init)
 
             # Python 3.10+ only syntax
             with (
@@ -219,24 +263,15 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
                 csv_out_file_spar.write(";")
                 csv_out_file_komf.write(";")
                 csv_out_file_flex.write(";")
-                
+
                 for i in range(advance_days):
-                    next_entry_sparschiene = results_sparschiene[i]
-                    next_entry_komfortschiene = results_komfortschiene[i]
-                    next_entry_flexschiene = results_flexschiene[i]
-                    if cat_type in next_entry_sparschiene:
-                        csv_out_file_spar.write(f"{next_entry_sparschiene[cat_type]};")
-                    else:
-                        csv_out_file_spar.write("N;")
-                    if cat_type in next_entry_komfortschiene:
-                        csv_out_file_komf.write(f"{next_entry_komfortschiene[cat_type]};")
-                    else:
-                        csv_out_file_komf.write("N;")
-                    if cat_type in next_entry_flexschiene:
-                        csv_out_file_flex.write(f"{next_entry_flexschiene[cat_type]};")
-                    else:
-                        csv_out_file_flex.write("N;")
-                
+                    next_entry_spar = results_sparschiene[i]
+                    next_entry_komfort = results_komfortschiene[i]
+                    next_entry_flex = results_flexschiene[i]
+                    csv_out_file_spar.write(f"{next_entry_spar.get(cat_type, 'N')};")
+                    csv_out_file_komf.write(f"{next_entry_komfort.get(cat_type, 'N')};")
+                    csv_out_file_flex.write(f"{next_entry_flex.get(cat_type, 'N')};")
+
                 csv_out_file_spar.write("\n")
                 csv_out_file_komf.write("\n")
                 csv_out_file_flex.write("\n")
@@ -257,14 +292,14 @@ def main():
             "type": "person",
             "gender": "male",
             "birthDate": "1993-06-16",
-            "cards": [100000042] # 100000042 = Klimaticket
+            "cards": [100000042],  # 100000042 = Klimaticket
         },
         {
             "type": "person",
             "gender": "female",
             "birthDate": "1993-06-16",
-            "cards": [100000042] # 100000042 = Klimaticket
-        }
+            "cards": [100000042],  # 100000042 = Klimaticket
+        },
     ]
 
     protocol_connection(jetter, station_from, station_to, date_start, 30, passengers)
@@ -273,5 +308,5 @@ def main():
     # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
