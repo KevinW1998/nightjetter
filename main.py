@@ -10,6 +10,12 @@ AVAIL_LEVEL_PRIVATE_COUCHETTE = 3
 AVAIL_LEVEL_BED = 4
 AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED = 5
 
+level_mapping = {
+    AVAIL_LEVEL_SEAT: ["sideCorridorCoach_2", "privateSeat", "centralGangwayCoachComfort_2", "centralGangwayCoachWithTableComfort_2", "serverlyDisabledPerson"],
+    AVAIL_LEVEL_COUCHETTE: ["couchette4", "couchette6", "couchette4comfort", "femaleCouchette4", "femaleCouchette6", "femaleCouchette4comfort", "couchetteMiniSuite"],
+    AVAIL_LEVEL_PRIVATE_COUCHETTE: ["privateCouchette", "privateCouchette4comfort"],
+    AVAIL_LEVEL_BED: ["single", "singleWithShowerWC", "double", "doubleWithShowerWC", "singleComfort", "doubleComfort", "singleComfortPlus", "doubleComfortPlus"],
+}
 
 class Nightjetter:
     def __init__(self) -> None:
@@ -136,17 +142,12 @@ class Nightjetter:
         
         # Now calc avail level
         avail_level = AVAIL_LEVEL_NONE
-        if "sideCorridorCoach_2" in flexschiene or "privateSeat" in flexschiene or "centralGangwayCoachComfort_2" in flexschiene or "centralGangwayCoachWithTableComfort_2" in flexschiene or "serverlyDisabledPerson" in flexschiene:
-            avail_level = AVAIL_LEVEL_SEAT
-        if "couchette4" in flexschiene or "couchette6" in flexschiene or "couchette4comfort" in flexschiene or "femaleCouchette4" in flexschiene or "femaleCouchette6" in flexschiene or "femaleCouchette4comfort" in flexschiene or "couchetteMiniSuite" in flexschiene:
-            avail_level = AVAIL_LEVEL_COUCHETTE
-        if "privateCouchette" in flexschiene or "privateCouchette4comfort" in flexschiene:
-            avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE
-        if "single" in flexschiene or "singleWithShowerWC" in flexschiene or "double" in flexschiene or "doubleWithShowerWC" in flexschiene or "singleComfort" in flexschiene or "doubleComfort" in flexschiene or "singleComfortPlus" in flexschiene or "doubleComfortPlus":
-            if avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE:
-                avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
-            else:
-                avail_level = AVAIL_LEVEL_BED
+        for level, comp_identifier_list in level_mapping.items():
+            if any(comp_identifier_list) in flexschiene:
+                if level == AVAIL_LEVEL_BED and avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE:
+                    avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
+                else:
+                    avail_level = level
         return (avail_level, sparschiene, komfortschiene, flexschiene)
 
 
@@ -199,8 +200,8 @@ def protocol_connection(jetter: Nightjetter, station_from, station_to, date_star
             line_time += f"{avail_level};"
         print(f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}")
     
-    print("Outputting prices by category:")
     if csv_out_price_prefix is not None:
+        print("Outputting prices by category")
         for cat_type in avail_cat_types:
             fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
             fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
