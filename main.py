@@ -11,7 +11,7 @@ AVAIL_LEVEL_PRIVATE_COUCHETTE = 3
 AVAIL_LEVEL_BED = 4
 AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED = 5
 
-level_mapping = {
+LEVEL_MAPPING = {
     AVAIL_LEVEL_SEAT: {
         "sideCorridorCoach_2",
         "privateSeat",
@@ -170,7 +170,7 @@ class Nightjetter:
 
         # Now calc avail level
         avail_level = AVAIL_LEVEL_NONE
-        for level, comp_identifier_set in level_mapping.items():
+        for level, comp_identifier_set in LEVEL_MAPPING.items():
             if comp_identifier_set & set(flexschiene):
                 if (
                     level == AVAIL_LEVEL_BED
@@ -298,15 +298,22 @@ class AgeGroups(Enum):
         return self.value.isoformat()  # YYYY-MM-DD
 
 
+class Gender(StrEnum):
+    MALE = "male"
+    FEMALE = "female"
+    DIVERSE = "diverse"
+
+
+# Many more availables, but here probably the most important ones
+REDUCTION_CARDS = {
+    "DB-Bahncard-25-2Kl": 127,
+    "DB-Bahncard-50-2Kl": 129,
+    "DB-Ticket-Deutschland-2Kl": 9098153,
+    "Klimaticket": 100000042,
+}
+
+
 def main():
-    # Many more availables, but here probably the most important ones
-    reduction_cards = {
-        "DB-Bahncard-25-2Kl": 127,
-        "DB-Bahncard-50-2Kl": 129,
-        "DB-Ticket-Deutschland-2Kl": 9098153,
-        "Klimaticket": 100000042,
-    }
-    Gender = StrEnum("Gender", ["MALE", "FEMALE", "DIVERSE"])
     jetter = Nightjetter()
 
     date_start = date(2024, 3, 15)
@@ -317,13 +324,13 @@ def main():
             "type": "person",
             "gender": Gender.MALE,
             "birthDate": AgeGroups.ADULT.isoformat(),
-            "cards": [reduction_cards["Klimaticket"]],
+            "cards": [REDUCTION_CARDS["Klimaticket"]],
         },
         {
             "type": "person",
             "gender": Gender.FEMALE,
             "birthDate": AgeGroups.ADULT.isoformat(),
-            "cards": [reduction_cards["Klimaticket"]],
+            "cards": [REDUCTION_CARDS["Klimaticket"]],
         },
     ]
 
