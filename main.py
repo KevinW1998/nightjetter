@@ -1,3 +1,4 @@
+from enum import Enum, StrEnum
 import requests
 from datetime import date, datetime, timedelta
 import os
@@ -281,7 +282,31 @@ def protocol_connection(
         csv_out_file.write(f"{line_time}\n")
 
 
+TODAY = date.today()
+
+
+class AgeGroups(Enum):
+    """
+    AgeGroups with the possibilities and to which birthDate they are computed
+    """
+
+    ADULT = TODAY.replace(year=TODAY.year - 30)
+    KID = TODAY.replace(year=TODAY.year - 8)
+    SMALL_KID = TODAY
+
+    def isoformat(self):
+        return self.value.isoformat()  # YYYY-MM-DD
+
+
 def main():
+    # Many more availables, but here probably the most important ones
+    reduction_cards = {
+        "DB-Bahncard-25-2Kl": 127,
+        "DB-Bahncard-50-2Kl": 129,
+        "DB-Ticket-Deutschland-2Kl": 9098153,
+        "Klimaticket": 100000042,
+    }
+    Gender = StrEnum("Gender", ["MALE", "FEMALE", "DIVERSE"])
     jetter = Nightjetter()
 
     date_start = date(2024, 3, 15)
@@ -290,15 +315,15 @@ def main():
     passengers = [
         {
             "type": "person",
-            "gender": "male",
-            "birthDate": "1993-06-16",
-            "cards": [100000042],  # 100000042 = Klimaticket
+            "gender": Gender.MALE,
+            "birthDate": AgeGroups.ADULT.isoformat(),
+            "cards": [reduction_cards["Klimaticket"]],
         },
         {
             "type": "person",
-            "gender": "female",
-            "birthDate": "1993-06-16",
-            "cards": [100000042],  # 100000042 = Klimaticket
+            "gender": Gender.FEMALE,
+            "birthDate": AgeGroups.ADULT.isoformat(),
+            "cards": [reduction_cards["Klimaticket"]],
         },
     ]
 
