@@ -1,4 +1,4 @@
-from enum import Enum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 import requests
 from datetime import date, datetime, timedelta
 import os
@@ -74,7 +74,7 @@ class Nightjetter:
         # find first non-meta
         target = None
         for station in stations_json:
-            if station["name"] != "":
+            if station["name"]:
                 target = station
                 break
 
@@ -133,6 +133,8 @@ class Nightjetter:
         offers = self.findOffers(station_from, station_to, day, passengers)
         if offers is None:
             return None
+
+        # print(f"Seats available from {station_from} to {station_to} on {day}")
 
         sparschiene = {}
         komfortschiene = {}
@@ -199,9 +201,10 @@ def protocol_connection(
 ):
     prefix = "output"
     os.makedirs(prefix, exist_ok=True)
-    csv_out = f"{prefix}/{station_from}_{station_to}.csv"
+    filename = f"{station_from}_{station_to}_{len(passengers)}PAX_{date_start}"
+    csv_out = f"{prefix}/{filename}.csv"
     # TODO: add option to skip prices output
-    csv_out_price_prefix = f"{prefix}/prices_{station_from}_{station_to}"
+    csv_out_price_prefix = f"{prefix}/prices_{filename}"
 
     (_, station_from_resl_name) = jetter.findStationId(station_from)
     (_, station_to_resl_name) = jetter.findStationId(station_to)
@@ -222,7 +225,7 @@ def protocol_connection(
         )
         if offers is None:
             line_time += "N;"
-            if csv_out_price_prefix is not None:
+            if csv_out_price_prefix:
                 results_sparschiene.append({})
                 results_komfortschiene.append({})
                 results_flexschiene.append({})
@@ -233,7 +236,7 @@ def protocol_connection(
                 komfortschiene,
                 flexschiene,
             ) = offers  # TODO: protocol prices
-            if csv_out_price_prefix is not None:
+            if csv_out_price_prefix:
                 results_sparschiene.append(sparschiene)
                 results_komfortschiene.append(komfortschiene)
                 results_flexschiene.append(flexschiene)
@@ -245,7 +248,7 @@ def protocol_connection(
             f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}"
         )
 
-    if csv_out_price_prefix is not None:
+    if csv_out_price_prefix and avail_cat_types:
         print("Outputting prices by category")
         for cat_type in avail_cat_types:
             fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
@@ -285,17 +288,13 @@ def protocol_connection(
 TODAY = date.today()
 
 
-class AgeGroups(Enum):
+class AgeGroups(StrEnum):
     """
     AgeGroups with the possibilities and to which birthDate they are computed
     """
-
-    ADULT = TODAY.replace(year=TODAY.year - 30)
-    KID = TODAY.replace(year=TODAY.year - 8)
-    SMALL_KID = TODAY
-
-    def isoformat(self):
-        return self.value.isoformat()  # YYYY-MM-DD
+    ADULT = TODAY.replace(year=TODAY.year - 30).isoformat()
+    KID = TODAY.replace(year=TODAY.year - 8).isoformat()
+    SMALL_KID = TODAY.isoformat()
 
 
 class Gender(StrEnum):
@@ -305,12 +304,11 @@ class Gender(StrEnum):
 
 
 # Many more availables, but here probably the most important ones
-REDUCTION_CARDS = {
-    "DB-Bahncard-25-2Kl": 127,
-    "DB-Bahncard-50-2Kl": 129,
-    "DB-Ticket-Deutschland-2Kl": 9098153,
-    "Klimaticket": 100000042,
-}
+class ReductionCards(IntEnum):
+    DB_BAHNCARD_25_2KL = 127
+    DB_BAHNCARD_50_2KL = 129
+    DB_TICKET_DEUTSCHLAND_2KL = 9098153
+    KLIMATICKET = 100000042
 
 
 def main():
@@ -323,18 +321,18 @@ def main():
         {
             "type": "person",
             "gender": Gender.MALE,
-            "birthDate": AgeGroups.ADULT.isoformat(),
-            "cards": [REDUCTION_CARDS["Klimaticket"]],
+            "birthDate": AgeGroups.ADULT,
+            "cards": [ReductionCards.KLIMATICKET],
         },
         {
             "type": "person",
             "gender": Gender.FEMALE,
-            "birthDate": AgeGroups.ADULT.isoformat(),
-            "cards": [REDUCTION_CARDS["Klimaticket"]],
+            "birthDate": AgeGroups.ADULT,
+            "cards": [ReductionCards.KLIMATICKET],
         },
     ]
 
-    protocol_connection(jetter, station_from, station_to, date_start, 30, passengers)
+    protocol_connection(jetter, station_from, station_to, date_start, 7, passengers)
     # (wienID, _) = jetter.findStationId("Wien")
     # (hannoverID, _) = jetter.findStationId("Hannover")
     # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
