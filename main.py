@@ -1,4 +1,5 @@
-from enum import Enum, IntEnum, StrEnum
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
 import requests
 from datetime import date, datetime, timedelta
 import os
@@ -292,6 +293,7 @@ class AgeGroups(StrEnum):
     """
     AgeGroups with the possibilities and to which birthDate they are computed
     """
+
     ADULT = TODAY.replace(year=TODAY.year - 30).isoformat()
     KID = TODAY.replace(year=TODAY.year - 8).isoformat()
     SMALL_KID = TODAY.isoformat()
@@ -311,25 +313,36 @@ class ReductionCards(IntEnum):
     KLIMATICKET = 100000042
 
 
+@dataclass
+class Passenger:
+    gender: Gender
+    age_group: AgeGroups
+    reduction_cards: list[ReductionCards]
+
+    def to_dict(self):
+        return {
+            "type": "person",
+            "gender": self.gender,
+            "birthDate": self.age_group,
+            "cards": self.reduction_cards,
+        }
+
+
 def main():
     jetter = Nightjetter()
 
     date_start = date(2024, 3, 15)
     station_from = "Berlin"
     station_to = "Paris"
+    male_adult_with_klimaticket = Passenger(
+        Gender.MALE, AgeGroups.ADULT, [ReductionCards.KLIMATICKET]
+    )
+    female_adult_with_klimaticket = Passenger(
+        Gender.FEMALE, AgeGroups.ADULT, [ReductionCards.KLIMATICKET]
+    )
     passengers = [
-        {
-            "type": "person",
-            "gender": Gender.MALE,
-            "birthDate": AgeGroups.ADULT,
-            "cards": [ReductionCards.KLIMATICKET],
-        },
-        {
-            "type": "person",
-            "gender": Gender.FEMALE,
-            "birthDate": AgeGroups.ADULT,
-            "cards": [ReductionCards.KLIMATICKET],
-        },
+        male_adult_with_klimaticket.to_dict(),
+        female_adult_with_klimaticket.to_dict(),
     ]
 
     protocol_connection(jetter, station_from, station_to, date_start, 7, passengers)
