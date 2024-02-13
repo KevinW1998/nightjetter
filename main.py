@@ -222,6 +222,7 @@ def protocol_connection(
     filename = f"{station_from}_{station_to}_{len(passengers)}PAX_{date_start}"
     if on_lambda:
         app.log.debug(filename)
+        csv_out_price_prefix = "anything-to-turn-on-logging"
     else:
         prefix = "output"
         os.makedirs(prefix, exist_ok=True)
@@ -281,10 +282,10 @@ def protocol_connection(
             flex_offers = [str(offer.get(cat_type)) for offer in results_flexschiene]
 
             if on_lambda:
-                app.log.debug(f"{cat_type}{line_init}")
-                app.log.debug(f"spar;{(';').join(spar_offers)}\n")
-                app.log.debug(f"komf;{(';').join(komf_offers)}\n")
-                app.log.debug(f"flex;{(';').join(flex_offers)}\n")
+                app.log.debug(f"CATEGORY-{cat_type}{line_init}")
+                app.log.debug(f"spar;{(';').join(spar_offers)}")
+                app.log.debug(f"komf;{(';').join(komf_offers)}")
+                app.log.debug(f"flex;{(';').join(flex_offers)}")
             else:
                 fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
                 fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
