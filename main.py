@@ -5,22 +5,25 @@ from datetime import date, datetime, timedelta
 import os
 import io
 
-AVAIL_LEVEL_NONE = 0
-AVAIL_LEVEL_SEAT = 1
-AVAIL_LEVEL_COUCHETTE = 2
-AVAIL_LEVEL_PRIVATE_COUCHETTE = 3
-AVAIL_LEVEL_BED = 4
-AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED = 5
+
+class AvailLevel(StrEnum):
+    NONE = "None"
+    SEAT = "Seat"
+    COUCHETTE = "Couchette"
+    PRIVATE_COUCHETTE = "Private_Couchette"
+    BED = "Bed"
+    PRIVATE_COUCHETTE_OR_BED = "Private_Couchette_Or_Bed"
+
 
 LEVEL_MAPPING = {
-    AVAIL_LEVEL_SEAT: {
+    AvailLevel.SEAT: {
         "sideCorridorCoach_2",
         "privateSeat",
         "centralGangwayCoachComfort_2",
         "centralGangwayCoachWithTableComfort_2",
         "serverlyDisabledPerson",
     },
-    AVAIL_LEVEL_COUCHETTE: {
+    AvailLevel.COUCHETTE: {
         "couchette4",
         "couchette6",
         "couchette4comfort",
@@ -29,8 +32,8 @@ LEVEL_MAPPING = {
         "femaleCouchette4comfort",
         "couchetteMiniSuite",
     },
-    AVAIL_LEVEL_PRIVATE_COUCHETTE: {"privateCouchette", "privateCouchette4comfort"},
-    AVAIL_LEVEL_BED: {
+    AvailLevel.PRIVATE_COUCHETTE: {"privateCouchette", "privateCouchette4comfort"},
+    AvailLevel.BED: {
         "single",
         "singleWithShowerWC",
         "double",
@@ -172,14 +175,14 @@ class Nightjetter:
                     flexschiene[comp_identifier] = total_price
 
         # Now calc avail level
-        avail_level = AVAIL_LEVEL_NONE
+        avail_level = AvailLevel.NONE
         for level, comp_identifier_set in LEVEL_MAPPING.items():
             if comp_identifier_set & set(flexschiene):
                 if (
-                    level == AVAIL_LEVEL_BED
-                    and avail_level == AVAIL_LEVEL_PRIVATE_COUCHETTE
+                    level == AvailLevel.BED
+                    and avail_level == AvailLevel.PRIVATE_COUCHETTE
                 ):
-                    avail_level = AVAIL_LEVEL_PRIVATE_COUCHETTE_OR_BED
+                    avail_level = AvailLevel.PRIVATE_COUCHETTE_OR_BED
                 else:
                     avail_level = level
         return (avail_level, sparschiene, komfortschiene, flexschiene)
