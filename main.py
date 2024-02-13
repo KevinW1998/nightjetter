@@ -228,7 +228,7 @@ def protocol_connection(
             station_from, station_to, next_date, passengers
         )
         if offers is None:
-            line_time += "N;"
+            line_time += "None;"
             if csv_out_price_prefix:
                 results_sparschiene.append({})
                 results_komfortschiene.append({})
@@ -255,6 +255,10 @@ def protocol_connection(
     if csv_out_price_prefix and avail_cat_types:
         print("Outputting prices by category")
         for cat_type in avail_cat_types:
+            spar_offers = [str(offer.get(cat_type)) for offer in results_sparschiene]
+            komf_offers = [str(offer.get(cat_type)) for offer in results_komfortschiene]
+            flex_offers = [str(offer.get(cat_type)) for offer in results_flexschiene]
+
             fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
             fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
             fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
@@ -268,21 +272,9 @@ def protocol_connection(
                 io.open(fname_komfortschiene, "a") as csv_out_file_komf,
                 io.open(fname_flexschiene, "a") as csv_out_file_flex,
             ):
-                csv_out_file_spar.write(";")
-                csv_out_file_komf.write(";")
-                csv_out_file_flex.write(";")
-
-                for i in range(advance_days):
-                    next_entry_spar = results_sparschiene[i]
-                    next_entry_komfort = results_komfortschiene[i]
-                    next_entry_flex = results_flexschiene[i]
-                    csv_out_file_spar.write(f"{next_entry_spar.get(cat_type, 'N')};")
-                    csv_out_file_komf.write(f"{next_entry_komfort.get(cat_type, 'N')};")
-                    csv_out_file_flex.write(f"{next_entry_flex.get(cat_type, 'N')};")
-
-                csv_out_file_spar.write("\n")
-                csv_out_file_komf.write("\n")
-                csv_out_file_flex.write("\n")
+                csv_out_file_spar.write(f";{(';').join(spar_offers)}\n")
+                csv_out_file_komf.write(f";{(';').join(komf_offers)}\n")
+                csv_out_file_flex.write(f";{(';').join(flex_offers)}\n")
 
     init_file(filename=csv_out, header=line_init)
     with io.open(csv_out, "a") as csv_out_file:
