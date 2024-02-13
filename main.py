@@ -1,9 +1,14 @@
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+import logging
 import requests
 from datetime import date, datetime, timedelta
 import os
 import io
+from chalice import Chalice, Cron
+
+app = Chalice(app_name="nightjetter")
+app.log.setLevel(logging.DEBUG)
 
 
 class AvailLevel(StrEnum):
@@ -138,7 +143,9 @@ class Nightjetter:
         if offers is None:
             return None
 
-        print(f"Seats available from {station_from} to {station_to} on {day}")
+        app.log.debug(
+            f"WARN: Seats available from {station_from} to {station_to} on {day}"
+        )
 
         sparschiene = {}
         komfortschiene = {}
@@ -202,13 +209,17 @@ def protocol_connection(
     date_start,
     advance_days=7,
     passengers=[],
+    on_lambda=False,
 ):
-    prefix = "output"
-    os.makedirs(prefix, exist_ok=True)
     filename = f"{station_from}_{station_to}_{len(passengers)}PAX_{date_start}"
-    csv_out = f"{prefix}/{filename}.csv"
-    # TODO: add option to skip prices output
-    csv_out_price_prefix = f"{prefix}/prices_{filename}"
+    if on_lambda:
+        app.log.debug(filename)
+    else:
+        prefix = "output"
+        os.makedirs(prefix, exist_ok=True)
+        csv_out = f"{prefix}/{filename}.csv"
+        # TODO: add option to skip prices output
+        csv_out_price_prefix = f"{prefix}/prices_{filename}"
 
     (_, station_from_resl_name) = jetter.findStationId(station_from)
     (_, station_to_resl_name) = jetter.findStationId(station_to)
@@ -248,37 +259,50 @@ def protocol_connection(
                 avail_cat_types.update(komfortschiene.keys())
                 avail_cat_types.update(flexschiene.keys())
             line_time += f"{avail_level};"
-        print(
+        app.log.debug(
             f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}"
         )
+    app.log.debug(f"Searched-on{line_init}")
+    app.log.debug(line_time)
 
     if csv_out_price_prefix and avail_cat_types:
-        print("Outputting prices by category")
+        app.log.debug("Outputting prices by category")
         for cat_type in avail_cat_types:
             spar_offers = [str(offer.get(cat_type)) for offer in results_sparschiene]
             komf_offers = [str(offer.get(cat_type)) for offer in results_komfortschiene]
             flex_offers = [str(offer.get(cat_type)) for offer in results_flexschiene]
 
-            fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
-            fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
-            fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
+            if on_lambda:
+                app.log.debug(f"{cat_type}{line_init}")
+                app.log.debug(f"spar;{(';').join(spar_offers)}\n")
+                app.log.debug(f"komf;{(';').join(komf_offers)}\n")
+                app.log.debug(f"flex;{(';').join(flex_offers)}\n")
+            else:
+                fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
+                fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
+                fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
 
-            for fname in (fname_flexschiene, fname_komfortschiene, fname_sparschiene):
-                init_file(filename=fname, header=line_init)
+                for fname in (
+                    fname_flexschiene,
+                    fname_komfortschiene,
+                    fname_sparschiene,
+                ):
+                    init_file(filename=fname, header=line_init)
 
-            # Python 3.10+ only syntax
-            with (
-                io.open(fname_sparschiene, "a") as csv_out_file_spar,
-                io.open(fname_komfortschiene, "a") as csv_out_file_komf,
-                io.open(fname_flexschiene, "a") as csv_out_file_flex,
-            ):
-                csv_out_file_spar.write(f";{(';').join(spar_offers)}\n")
-                csv_out_file_komf.write(f";{(';').join(komf_offers)}\n")
-                csv_out_file_flex.write(f";{(';').join(flex_offers)}\n")
+                # Python 3.10+ only syntax
+                with (
+                    io.open(fname_sparschiene, "a") as csv_out_file_spar,
+                    io.open(fname_komfortschiene, "a") as csv_out_file_komf,
+                    io.open(fname_flexschiene, "a") as csv_out_file_flex,
+                ):
+                    csv_out_file_spar.write(f";{(';').join(spar_offers)}\n")
+                    csv_out_file_komf.write(f";{(';').join(komf_offers)}\n")
+                    csv_out_file_flex.write(f";{(';').join(flex_offers)}\n")
 
-    init_file(filename=csv_out, header=line_init)
-    with io.open(csv_out, "a") as csv_out_file:
-        csv_out_file.write(f"{line_time}\n")
+    if not on_lambda:
+        init_file(filename=csv_out, header=line_init)
+        with io.open(csv_out, "a") as csv_out_file:
+            csv_out_file.write(f"{line_time}\n")
 
 
 TODAY = date.today()
@@ -329,7 +353,7 @@ MY = Passenger(Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL]
 MA = Passenger(Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
 
 
-def main():
+def main(on_lambda=False):
     jetter = Nightjetter()
 
     # date_start = date(2024, 3, 15)
@@ -344,6 +368,7 @@ def main():
         station_to="Berlin",
         date_start=date(2024, 4, 11),
         passengers=[MA.to_dict(), LI.to_dict(), FE.to_dict()],
+        on_lambda=on_lambda,
     )
     protocol_connection(
         jetter,
@@ -352,6 +377,7 @@ def main():
         date_start=date(2024, 3, 27),
         advance_days=2,
         passengers=[MY.to_dict()],
+        on_lambda=on_lambda,
     )
     protocol_connection(
         jetter,
@@ -360,11 +386,17 @@ def main():
         date_start=date(2024, 4, 1),
         advance_days=3,
         passengers=[MY.to_dict()],
+        on_lambda=on_lambda,
     )
 
     # (wienID, _) = jetter.findStationId("Wien")
     # (hannoverID, _) = jetter.findStationId("Hannover")
     # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
+
+
+@app.schedule(Cron(0, 8, "*", "*", "*", "*"))
+def lambda_func(event):
+    main(on_lambda=True)
 
 
 if __name__ == "__main__":
