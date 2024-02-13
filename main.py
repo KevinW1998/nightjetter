@@ -289,9 +289,9 @@ def protocol_connection(
 TODAY = date.today()
 
 
-class AgeGroups(StrEnum):
+class AgeGroup(StrEnum):
     """
-    AgeGroups with the possibilities and to which birthDate they are computed
+    AgeGroup enumerating possibilities and to which birthDate they are computed
     """
 
     ADULT = TODAY.replace(year=TODAY.year - 30).isoformat()
@@ -306,7 +306,7 @@ class Gender(StrEnum):
 
 
 # Many more availables, but here probably the most important ones
-class ReductionCards(IntEnum):
+class ReductionCard(IntEnum):
     DB_BAHNCARD_25_2KL = 127
     DB_BAHNCARD_50_2KL = 129
     DB_TICKET_DEUTSCHLAND_2KL = 9098153
@@ -316,8 +316,8 @@ class ReductionCards(IntEnum):
 @dataclass
 class Passenger:
     gender: Gender
-    age_group: AgeGroups
-    reduction_cards: list[ReductionCards]
+    age_group: AgeGroup
+    reduction_cards: list[ReductionCard]
 
     def to_dict(self):
         return {
@@ -335,10 +335,10 @@ def main():
     station_from = "Berlin"
     station_to = "Paris"
     male_adult_with_klimaticket = Passenger(
-        Gender.MALE, AgeGroups.ADULT, [ReductionCards.KLIMATICKET]
+        Gender.MALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
     )
     female_adult_with_klimaticket = Passenger(
-        Gender.FEMALE, AgeGroups.ADULT, [ReductionCards.KLIMATICKET]
+        Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
     )
     passengers = [
         male_adult_with_klimaticket.to_dict(),
