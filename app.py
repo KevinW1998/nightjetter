@@ -420,7 +420,8 @@ def main(on_lambda=False):
         protocol_connection(jetter, on_lambda=on_lambda, **connection.to_kwargs())
 
 
-@app.schedule(Cron(0, 8, "*", "*", "*", "*"))
+# See reference https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
+@app.schedule(Cron(1, 8, "*", "*", "?", "*"))
 def lambda_func(event):
     main(on_lambda=True)
 
