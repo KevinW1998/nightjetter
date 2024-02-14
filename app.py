@@ -395,7 +395,8 @@ def main(on_lambda=False):
     # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
 
 
-@app.schedule(Cron(0, 8, "*", "*", "*", "*"))
+# See reference https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
+@app.schedule(Cron(1, 8, "*", "*", "?", "*"))
 def lambda_func(event):
     main(on_lambda=True)
 
