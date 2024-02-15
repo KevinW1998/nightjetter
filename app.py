@@ -1,10 +1,11 @@
-from dataclasses import dataclass
-from enum import IntEnum, StrEnum
-import logging
-import requests
-from datetime import date, datetime, timedelta
-import os
 import io
+import logging
+import os
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from enum import IntEnum, StrEnum
+
+import requests
 from chalice import Chalice, Cron
 
 app = Chalice(app_name="nightjetter")
@@ -335,6 +336,7 @@ class ReductionCard(IntEnum):
 
 @dataclass
 class Passenger:
+    name: str
     gender: Gender
     age_group: AgeGroup
     reduction_cards: list[ReductionCard]
@@ -348,57 +350,111 @@ class Passenger:
         }
 
 
-FE = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
-LI = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
-MY = Passenger(Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
-MA = Passenger(Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+FE = Passenger("FE", Gender.MALE, AgeGroup.SMALL_KID, [])
+LI = Passenger("LI", Gender.MALE, AgeGroup.SMALL_KID, [])
+MY = Passenger("MY", Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+MA = Passenger("MA", Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+PASSENGERS = {"FE": FE, "LI": LI, "MY": MY, "MA": MA}
 
 
-def main(on_lambda=False):
-    jetter = Nightjetter()
+@dataclass
+class Connection:
+    station_from: str
+    station_to: str
+    date_start: date
+    advance_days: int
+    passengers: list[Passenger]
 
-    # date_start = date(2024, 3, 15)
-    # station_from = "Berlin"
-    # station_to = "Paris"
-    # passengers = []
-    # protocol_connection(jetter, station_from, station_to, date_start, 7, passengers)
+    passengers_sep: str = ";"
+    attributes_sep: str = ","
 
-    protocol_connection(
-        jetter,
+    def to_kwargs(self) -> dict:
+        return {
+            "station_from": self.station_from,
+            "station_to": self.station_to,
+            "date_start": self.date_start,
+            "advance_days": self.advance_days,
+            "passengers": [passenger.to_dict() for passenger in self.passengers],
+        }
+
+    def to_envvar_string(self) -> str:
+        passengers_str = self.passengers_sep.join(
+            passenger.name for passenger in self.passengers
+        )
+
+        return self.attributes_sep.join(
+            (
+                self.station_from,
+                self.station_to,
+                self.date_start.isoformat(),
+                str(self.advance_days),
+                passengers_str,
+            )
+        )
+
+    @staticmethod
+    def from_envvar_string(envvar_string: str) -> "Connection":
+        assert envvar_string.count(Connection.attributes_sep) == 4
+        (
+            station_from,
+            station_to,
+            date_start,
+            advance_days,
+            passengers,
+        ) = envvar_string.split(Connection.attributes_sep)
+        return Connection(
+            station_from=station_from,
+            station_to=station_to,
+            date_start=date.fromisoformat(date_start),
+            advance_days=int(advance_days),
+            passengers=[
+                PASSENGERS[passenger_name]
+                for passenger_name in passengers.split(Connection.passengers_sep)
+            ],
+        )
+
+
+CONNECTIONS = [
+    Connection(
         station_from="Paris",
         station_to="Berlin",
         date_start=date(2024, 4, 11),
-        passengers=[MA.to_dict(), LI.to_dict(), FE.to_dict()],
-        on_lambda=on_lambda,
-    )
-    protocol_connection(
-        jetter,
+        advance_days=4,
+        passengers=[MA, LI, FE],
+    ),
+    Connection(
         station_from="Berlin",
         station_to="Paris",
         date_start=date(2024, 3, 27),
         advance_days=2,
-        passengers=[MY.to_dict()],
-        on_lambda=on_lambda,
-    )
-    protocol_connection(
-        jetter,
+        passengers=[MY],
+    ),
+    Connection(
         station_from="Paris",
         station_to="Berlin",
         date_start=date(2024, 4, 1),
         advance_days=3,
-        passengers=[MY.to_dict()],
-        on_lambda=on_lambda,
-    )
+        passengers=[MY],
+    ),
+]
 
-    # (wienID, _) = jetter.findStationId("Wien")
-    # (hannoverID, _) = jetter.findStationId("Hannover")
-    # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
+
+def main():
+    jetter = Nightjetter()
+    for connection in CONNECTIONS:
+        protocol_connection(jetter, **connection.to_kwargs())
 
 
 # See reference https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
 @app.schedule(Cron(1, 8, "*", "*", "?", "*"))
 def lambda_func(event):
-    main(on_lambda=True)
+    jetter = Nightjetter()
+    # Generate CONNECTIONS_STR using the env_var.py file
+    # Then add it to the config.json environment_variables attribute
+    connections_str = os.environ.get("CONNECTIONS_STR")
+    for connection_str in connections_str.split("__"):
+        connection = Connection.from_envvar_string(connection_str)
+        protocol_connection(jetter, on_lambda=True, **connection.to_kwargs())
 
 
 if __name__ == "__main__":
