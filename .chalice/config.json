@@ -3,7 +3,7 @@
   "app_name": "nightjetter",
   "stages": {
     "dev": {
-      "api_gateway_stage": "api"
+      "log_retention_in_days": 10
     }
   }
 }
