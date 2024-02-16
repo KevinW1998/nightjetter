@@ -1,9 +1,15 @@
-from dataclasses import dataclass
-from enum import IntEnum, StrEnum
-import requests
-from datetime import date, datetime, timedelta
-import os
 import io
+import logging
+import os
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from enum import IntEnum, StrEnum
+
+import requests
+from chalice import Chalice, Cron
+
+app = Chalice(app_name="nightjetter")
+app.log.setLevel(logging.DEBUG)
 
 
 class AvailLevel(StrEnum):
@@ -44,6 +50,33 @@ LEVEL_MAPPING = {
         "doubleComfortPlus",
     },
 }
+
+
+def notify_by_mail(
+    station_from, station_to, day, avail_level, sparschiene, komfortschiene, flexschiene
+):
+    sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
+    if sendgrid_api_key:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+
+        plain_text_content = (
+            f"Seats availables up to category {avail_level}\n"
+            f"Offers for spar: {sparschiene}\n"
+            f"Offers for komfort: {komfortschiene}\n"
+            f"Offers for flex: {flexschiene}"
+        )
+        message = Mail(
+            from_email=os.environ.get("SENDGRID_FROM_EMAIL"),
+            to_emails=os.environ.get("SENDGRID_TO_EMAIL"),
+            subject=f"Nightjet seats available from {station_from} to {station_to} on {day}",
+            plain_text_content=plain_text_content,
+        )
+        try:
+            sg = SendGridAPIClient(sendgrid_api_key)
+            sg.send(message)
+        except Exception as e:
+            app.log.error(e.message)
 
 
 class Nightjetter:
@@ -138,7 +171,9 @@ class Nightjetter:
         if offers is None:
             return None
 
-        # print(f"Seats available from {station_from} to {station_to} on {day}")
+        app.log.debug(
+            f"WARN: Seats available from {station_from} to {station_to} on {day}"
+        )
 
         sparschiene = {}
         komfortschiene = {}
@@ -185,6 +220,16 @@ class Nightjetter:
                     avail_level = AvailLevel.PRIVATE_COUCHETTE_OR_BED
                 else:
                     avail_level = level
+
+        notify_by_mail(
+            station_from,
+            station_to,
+            day,
+            avail_level,
+            sparschiene,
+            komfortschiene,
+            flexschiene,
+        )
         return (avail_level, sparschiene, komfortschiene, flexschiene)
 
 
@@ -200,15 +245,20 @@ def protocol_connection(
     station_from,
     station_to,
     date_start,
-    advance_days=30,
+    advance_days=7,
     passengers=[],
+    on_lambda=False,
 ):
-    prefix = "output"
-    os.makedirs(prefix, exist_ok=True)
     filename = f"{station_from}_{station_to}_{len(passengers)}PAX_{date_start}"
-    csv_out = f"{prefix}/{filename}.csv"
-    # TODO: add option to skip prices output
-    csv_out_price_prefix = f"{prefix}/prices_{filename}"
+    if on_lambda:
+        app.log.debug(filename)
+        csv_out_price_prefix = "anything-to-turn-on-logging"
+    else:
+        prefix = "output"
+        os.makedirs(prefix, exist_ok=True)
+        csv_out = f"{prefix}/{filename}.csv"
+        # TODO: add option to skip prices output
+        csv_out_price_prefix = f"{prefix}/prices_{filename}"
 
     (_, station_from_resl_name) = jetter.findStationId(station_from)
     (_, station_to_resl_name) = jetter.findStationId(station_to)
@@ -248,37 +298,50 @@ def protocol_connection(
                 avail_cat_types.update(komfortschiene.keys())
                 avail_cat_types.update(flexschiene.keys())
             line_time += f"{avail_level};"
-        print(
+        app.log.debug(
             f"Processing connection from {station_from_resl_name} to {station_to_resl_name} at {next_date}"
         )
+    app.log.debug(f"Searched-on{line_init}")
+    app.log.debug(line_time)
 
     if csv_out_price_prefix and avail_cat_types:
-        print("Outputting prices by category")
+        app.log.debug("Outputting prices by category")
         for cat_type in avail_cat_types:
             spar_offers = [str(offer.get(cat_type)) for offer in results_sparschiene]
             komf_offers = [str(offer.get(cat_type)) for offer in results_komfortschiene]
             flex_offers = [str(offer.get(cat_type)) for offer in results_flexschiene]
 
-            fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
-            fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
-            fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
+            if on_lambda:
+                app.log.debug(f"CATEGORY-{cat_type}{line_init}")
+                app.log.debug(f"spar;{(';').join(spar_offers)}")
+                app.log.debug(f"komf;{(';').join(komf_offers)}")
+                app.log.debug(f"flex;{(';').join(flex_offers)}")
+            else:
+                fname_sparschiene = f"{csv_out_price_prefix}-{cat_type}-spar.csv"
+                fname_komfortschiene = f"{csv_out_price_prefix}-{cat_type}-komf.csv"
+                fname_flexschiene = f"{csv_out_price_prefix}-{cat_type}-flex.csv"
 
-            for fname in (fname_flexschiene, fname_komfortschiene, fname_sparschiene):
-                init_file(filename=fname, header=line_init)
+                for fname in (
+                    fname_flexschiene,
+                    fname_komfortschiene,
+                    fname_sparschiene,
+                ):
+                    init_file(filename=fname, header=line_init)
 
-            # Python 3.10+ only syntax
-            with (
-                io.open(fname_sparschiene, "a") as csv_out_file_spar,
-                io.open(fname_komfortschiene, "a") as csv_out_file_komf,
-                io.open(fname_flexschiene, "a") as csv_out_file_flex,
-            ):
-                csv_out_file_spar.write(f";{(';').join(spar_offers)}\n")
-                csv_out_file_komf.write(f";{(';').join(komf_offers)}\n")
-                csv_out_file_flex.write(f";{(';').join(flex_offers)}\n")
+                # Python 3.10+ only syntax
+                with (
+                    io.open(fname_sparschiene, "a") as csv_out_file_spar,
+                    io.open(fname_komfortschiene, "a") as csv_out_file_komf,
+                    io.open(fname_flexschiene, "a") as csv_out_file_flex,
+                ):
+                    csv_out_file_spar.write(f";{(';').join(spar_offers)}\n")
+                    csv_out_file_komf.write(f";{(';').join(komf_offers)}\n")
+                    csv_out_file_flex.write(f";{(';').join(flex_offers)}\n")
 
-    init_file(filename=csv_out, header=line_init)
-    with io.open(csv_out, "a") as csv_out_file:
-        csv_out_file.write(f"{line_time}\n")
+    if not on_lambda:
+        init_file(filename=csv_out, header=line_init)
+        with io.open(csv_out, "a") as csv_out_file:
+            csv_out_file.write(f"{line_time}\n")
 
 
 TODAY = date.today()
@@ -310,6 +373,7 @@ class ReductionCard(IntEnum):
 
 @dataclass
 class Passenger:
+    name: str
     gender: Gender
     age_group: AgeGroup
     reduction_cards: list[ReductionCard]
@@ -323,27 +387,111 @@ class Passenger:
         }
 
 
+FE = Passenger("FE", Gender.MALE, AgeGroup.SMALL_KID, [])
+LI = Passenger("LI", Gender.MALE, AgeGroup.SMALL_KID, [])
+MY = Passenger("MY", Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+MA = Passenger("MA", Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+PASSENGERS = {"FE": FE, "LI": LI, "MY": MY, "MA": MA}
+
+
+@dataclass
+class Connection:
+    station_from: str
+    station_to: str
+    date_start: date
+    advance_days: int
+    passengers: list[Passenger]
+
+    passengers_sep: str = ";"
+    attributes_sep: str = ","
+
+    def to_kwargs(self) -> dict:
+        return {
+            "station_from": self.station_from,
+            "station_to": self.station_to,
+            "date_start": self.date_start,
+            "advance_days": self.advance_days,
+            "passengers": [passenger.to_dict() for passenger in self.passengers],
+        }
+
+    def to_envvar_string(self) -> str:
+        passengers_str = self.passengers_sep.join(
+            passenger.name for passenger in self.passengers
+        )
+
+        return self.attributes_sep.join(
+            (
+                self.station_from,
+                self.station_to,
+                self.date_start.isoformat(),
+                str(self.advance_days),
+                passengers_str,
+            )
+        )
+
+    @staticmethod
+    def from_envvar_string(envvar_string: str) -> "Connection":
+        assert envvar_string.count(Connection.attributes_sep) == 4
+        (
+            station_from,
+            station_to,
+            date_start,
+            advance_days,
+            passengers,
+        ) = envvar_string.split(Connection.attributes_sep)
+        return Connection(
+            station_from=station_from,
+            station_to=station_to,
+            date_start=date.fromisoformat(date_start),
+            advance_days=int(advance_days),
+            passengers=[
+                PASSENGERS[passenger_name]
+                for passenger_name in passengers.split(Connection.passengers_sep)
+            ],
+        )
+
+
+CONNECTIONS = [
+    Connection(
+        station_from="Paris",
+        station_to="Berlin",
+        date_start=date(2024, 4, 11),
+        advance_days=4,
+        passengers=[MA, LI, FE],
+    ),
+    Connection(
+        station_from="Berlin",
+        station_to="Paris",
+        date_start=date(2024, 3, 27),
+        advance_days=2,
+        passengers=[MY],
+    ),
+    Connection(
+        station_from="Paris",
+        station_to="Berlin",
+        date_start=date(2024, 4, 1),
+        advance_days=3,
+        passengers=[MY],
+    ),
+]
+
+
 def main():
     jetter = Nightjetter()
+    for connection in CONNECTIONS:
+        protocol_connection(jetter, **connection.to_kwargs())
 
-    date_start = date(2024, 3, 15)
-    station_from = "Berlin"
-    station_to = "Paris"
-    male_adult_with_klimaticket = Passenger(
-        Gender.MALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
-    )
-    female_adult_with_klimaticket = Passenger(
-        Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
-    )
-    passengers = [
-        male_adult_with_klimaticket.to_dict(),
-        female_adult_with_klimaticket.to_dict(),
-    ]
 
-    protocol_connection(jetter, station_from, station_to, date_start, 7, passengers)
-    # (wienID, _) = jetter.findStationId("Wien")
-    # (hannoverID, _) = jetter.findStationId("Hannover")
-    # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
+# See reference https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html
+@app.schedule(Cron(1, 8, "*", "*", "?", "*"))
+def lambda_func(event):
+    jetter = Nightjetter()
+    # Generate CONNECTIONS_STR using the env_var.py file
+    # Then add it to the config.json environment_variables attribute
+    connections_str = os.environ.get("CONNECTIONS_STR")
+    for connection_str in connections_str.split("__"):
+        connection = Connection.from_envvar_string(connection_str)
+        protocol_connection(jetter, on_lambda=True, **connection.to_kwargs())
 
 
 if __name__ == "__main__":
