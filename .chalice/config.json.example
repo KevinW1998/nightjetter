@@ -1,0 +1,15 @@
+{
+  "version": "2.0",
+  "app_name": "nightjetter",
+  "stages": {
+    "dev": {
+      "log_retention_in_days": 14,
+      "environment_variables": {
+        "CONNECTIONS_STR": "Paris,Berlin,2024-04-11,4,MA;LI;FE__Berlin,Paris,2024-03-27,2,MY__Paris,Berlin,2024-04-01,3,MY",
+        "SENDGRID_API_KEY": "",
+        "SENDGRID_FROM_EMAIL": "foobar@gmail.com",
+        "SENDGRID_TO_EMAIL": "foobar@gmail.com"
+      }
+    }
+  }
+}

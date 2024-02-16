@@ -52,6 +52,33 @@ LEVEL_MAPPING = {
 }
 
 
+def notify_by_mail(
+    station_from, station_to, day, avail_level, sparschiene, komfortschiene, flexschiene
+):
+    sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
+    if sendgrid_api_key:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+
+        plain_text_content = (
+            f"Seats availables up to category {avail_level}\n"
+            f"Offers for spar: {sparschiene}\n"
+            f"Offers for komfort: {komfortschiene}\n"
+            f"Offers for flex: {flexschiene}"
+        )
+        message = Mail(
+            from_email=os.environ.get("SENDGRID_FROM_EMAIL"),
+            to_emails=os.environ.get("SENDGRID_TO_EMAIL"),
+            subject=f"Nightjet seats available from {station_from} to {station_to} on {day}",
+            plain_text_content=plain_text_content,
+        )
+        try:
+            sg = SendGridAPIClient(sendgrid_api_key)
+            sg.send(message)
+        except Exception as e:
+            app.log.error(e.message)
+
+
 class Nightjetter:
     # TODO: This could be set dynamically by parsing the HTML of the "ticket-buchen"
     # and read the value of div.nj-root.data-nj-base-url
@@ -201,6 +228,16 @@ class Nightjetter:
                     avail_level = AvailLevel.PRIVATE_COUCHETTE_OR_BED
                 else:
                     avail_level = level
+
+        notify_by_mail(
+            station_from,
+            station_to,
+            day,
+            avail_level,
+            sparschiene,
+            komfortschiene,
+            flexschiene,
+        )
         return (avail_level, sparschiene, komfortschiene, flexschiene)
 
 
