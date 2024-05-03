@@ -138,7 +138,7 @@ class Nightjetter:
         if offers is None:
             return None
 
-        # print(f"Seats available from {station_from} to {station_to} on {day}")
+        print(f"Seats available from {station_from} to {station_to} on {day}")
 
         sparschiene = {}
         komfortschiene = {}
@@ -200,7 +200,7 @@ def protocol_connection(
     station_from,
     station_to,
     date_start,
-    advance_days=30,
+    advance_days=7,
     passengers=[],
 ):
     prefix = "output"
@@ -323,27 +323,38 @@ class Passenger:
         }
 
 
+FE = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
+LI = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
+MY = Passenger(Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+MA = Passenger(Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+
+
 def main():
     jetter = Nightjetter()
 
-    date_start = date(2024, 3, 15)
-    station_from = "Berlin"
-    station_to = "Paris"
-    male_adult_with_klimaticket = Passenger(
-        Gender.MALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
+    protocol_connection(
+        jetter,
+        station_from="Paris",
+        station_to="Berlin",
+        date_start=date(2024, 4, 11),
+        passengers=[MA.to_dict(), LI.to_dict(), FE.to_dict()],
     )
-    female_adult_with_klimaticket = Passenger(
-        Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.KLIMATICKET]
+    protocol_connection(
+        jetter,
+        station_from="Berlin",
+        station_to="Paris",
+        date_start=date(2024, 3, 27),
+        advance_days=2,
+        passengers=[MY.to_dict()],
     )
-    passengers = [
-        male_adult_with_klimaticket.to_dict(),
-        female_adult_with_klimaticket.to_dict(),
-    ]
-
-    protocol_connection(jetter, station_from, station_to, date_start, 7, passengers)
-    # (wienID, _) = jetter.findStationId("Wien")
-    # (hannoverID, _) = jetter.findStationId("Hannover")
-    # print(json.dumps(jetter.findOffers("Wien", "Hannover", date(2023, 12, 20)), indent=2))
+    protocol_connection(
+        jetter,
+        station_from="Paris",
+        station_to="Berlin",
+        date_start=date(2024, 4, 1),
+        advance_days=3,
+        passengers=[MY.to_dict()],
+    )
 
 
 if __name__ == "__main__":
