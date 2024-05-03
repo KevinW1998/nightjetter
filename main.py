@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 import requests
 from datetime import date, datetime, timedelta
@@ -312,7 +312,7 @@ class ReductionCard(IntEnum):
 class Passenger:
     gender: Gender
     age_group: AgeGroup
-    reduction_cards: list[ReductionCard]
+    reduction_cards: list[ReductionCard] = field(default_factory=list)
 
     def to_dict(self):
         return {
@@ -329,32 +329,53 @@ MY = Passenger(Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL]
 MA = Passenger(Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
 
 
-def main():
-    jetter = Nightjetter()
+@dataclass
+class Connection:
+    station_from: str
+    station_to: str
+    date_start: date
+    advance_days: int
+    passengers: list[Passenger]
 
-    protocol_connection(
-        jetter,
+    def to_kwargs(self) -> dict:
+        return {
+            "station_from": self.station_from,
+            "station_to": self.station_to,
+            "date_start": self.date_start,
+            "advance_days": self.advance_days,
+            "passengers": [passenger.to_dict() for passenger in self.passengers],
+        }
+
+CONNECTIONS = [
+    Connection(
         station_from="Paris",
         station_to="Berlin",
         date_start=date(2024, 4, 11),
-        passengers=[MA.to_dict(), LI.to_dict(), FE.to_dict()],
-    )
-    protocol_connection(
-        jetter,
+        advance_days=4,
+        passengers=[MA, LI, FE],
+    ),
+    Connection(
         station_from="Berlin",
         station_to="Paris",
         date_start=date(2024, 3, 27),
         advance_days=2,
-        passengers=[MY.to_dict()],
-    )
-    protocol_connection(
-        jetter,
+        passengers=[MY],
+    ),
+    Connection(
         station_from="Paris",
         station_to="Berlin",
         date_start=date(2024, 4, 1),
         advance_days=3,
-        passengers=[MY.to_dict()],
-    )
+        passengers=[MY],
+    ),
+]
+
+
+def main():
+    jetter = Nightjetter()
+
+    for connection in CONNECTIONS:
+        protocol_connection(jetter, **connection.to_kwargs())
 
 
 if __name__ == "__main__":
