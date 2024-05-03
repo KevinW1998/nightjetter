@@ -47,6 +47,10 @@ LEVEL_MAPPING = {
 
 
 class Nightjetter:
+    # TODO: This could be set dynamically by parsing the HTML of the "ticket-buchen"
+    # and read the value of div.nj-root.data-nj-base-url
+    API_URL_BASE = "https://www.nightjet.com/nj-booking-ocp"
+
     def __init__(self) -> None:
         self.__session = requests.Session()
         self.__session.headers = {
@@ -54,11 +58,13 @@ class Nightjetter:
             "Referer": "https://www.nightjet.com/de/ticket-buchen",
         }
         response = self.__session.post(
-            "https://www.nightjet.com/nj-booking/init/start", json={"lang": "de"}
+            f"{self.API_URL_BASE}/init/start", json={"lang": "de"}
         )
-        content = response.json()
+        # sessioncookie is currently useless
         sessionCookie = response.cookies.get("SESSION")
         self.__session.cookies.set("SESSION", sessionCookie)
+
+        content = response.json()
         self.__session.headers["X-Public-ID"] = content["publicId"]
         self.__session.headers["X-Token"] = content["token"]
 
@@ -71,8 +77,10 @@ class Nightjetter:
         # self.__session.headers["CSRF-Token"] = content["CSRF-Token"]
 
     def findStationId(self, name):
+        # Parameter t was added, probably expects realistic since_epoch timestamp
+        # but for now works with whatever value
         stations = self.__session.get(
-            f"https://www.nightjet.com/nj-booking/stations/find?lang=de&country=at&name={name}"
+            f"{self.API_URL_BASE}/stations/find?lang=de&country=at&name={name}&t=1"
         )
         stations_json = stations.json()
         # find first non-meta
@@ -93,7 +101,7 @@ class Nightjetter:
         (station_to_id, _) = self.findStationId(station_to)
 
         fmt_date = day.strftime("%d%m%Y")
-        url_prefix = "https://www.nightjet.com/nj-booking/connection/find"
+        url_prefix = f"{self.API_URL_BASE}/connection/find"
         url_suffix = "00:00?skip=0&limit=1&backward=false&lang=de"
         connections = self.__session.get(
             f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}/{url_suffix}"
@@ -120,7 +128,7 @@ class Nightjetter:
         }
 
         response = self.__session.post(
-            "https://www.nightjet.com/nj-booking/offer/get", json=jsonBody
+            f"{self.API_URL_BASE}/offer/get", json=jsonBody
         )
 
         content = response.json()
@@ -287,11 +295,20 @@ TODAY = date.today()
 class AgeGroup(StrEnum):
     """
     AgeGroup enumerating possibilities and to which birthDate they are computed
+
+    ADULT_15_99: Age 15 and more
+    KID_10_14: Age 10 to 14
+    KID_6_9: Age 6 to 9
+    SMALL_KID_0_5: Age 0 to 5
+
+    There are since 2024 two kid categories in the frontend, which currently translate
+    to the same kid category and the same price, but this might change in the future.
     """
 
-    ADULT = TODAY.replace(year=TODAY.year - 30).isoformat()
-    KID = TODAY.replace(year=TODAY.year - 8).isoformat()
-    SMALL_KID = TODAY.isoformat()
+    ADULT_15_99 = TODAY.replace(year=TODAY.year - 30).isoformat()
+    KID_10_14 = TODAY.replace(year=TODAY.year - 10).isoformat()
+    KID_6_9 = TODAY.replace(year=TODAY.year - 10).isoformat()
+    SMALL_KID_0_5 = TODAY.isoformat()
 
 
 class Gender(StrEnum):
@@ -323,10 +340,10 @@ class Passenger:
         }
 
 
-FE = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
-LI = Passenger(Gender.MALE, AgeGroup.SMALL_KID, [])
-MY = Passenger(Gender.FEMALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
-MA = Passenger(Gender.MALE, AgeGroup.ADULT, [ReductionCard.DB_BAHNCARD_25_2KL])
+FE = Passenger(Gender.MALE, AgeGroup.SMALL_KID_0_5, [])
+LI = Passenger(Gender.MALE, AgeGroup.SMALL_KID_0_5, [])
+MY = Passenger(Gender.FEMALE, AgeGroup.ADULT_15_99, [ReductionCard.DB_BAHNCARD_25_2KL])
+MA = Passenger(Gender.MALE, AgeGroup.ADULT_15_99, [ReductionCard.DB_BAHNCARD_25_2KL])
 
 
 @dataclass
