@@ -1,2 +1,5 @@
 .venv
 output
+.chalice/*
+!.chalice/config.json.example
+*.pyc
