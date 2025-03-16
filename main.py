@@ -76,13 +76,25 @@ class Nightjetter:
         # content = response.json()
         # self.__session.headers["CSRF-Token"] = content["CSRF-Token"]
 
-    def findStationId(self, name):
+    def findStationId(self, name, allow_meta_search=False):
         # Parameter t was added, probably expects realistic since_epoch timestamp
         # but for now works with whatever value
         stations = self.__session.get(
             f"{self.API_URL_BASE}/stations/find?lang=de&country=at&name={name}&t=1"
         )
         stations_json = stations.json()
+
+        # check for meta
+        if allow_meta_search:
+            target = None
+            for station in stations_json:
+                if station["meta"]:
+                    target = station
+                    break
+            
+            if target is not None:
+                return (target["number"], target["meta"])
+
         # find first non-meta
         target = None
         for station in stations_json:
@@ -96,33 +108,12 @@ class Nightjetter:
         # print(f"Target: {repr(target)}")
         return (target["number"], target["name"])
 
-    def findStationIdMeta(self, name):
-        # Parameter t was added, probably expects realistic since_epoch timestamp
-        # but for now works with whatever value
-        stations = self.__session.get(
-            f"{self.API_URL_BASE}/stations/find?lang=de&country=at&name={name}&t=1"
-        )
-        stations_json = stations.json()
-
-        # find first meta
-        target = None
-        for station in stations_json:
-            if station["meta"]:
-                target = station
-                break
-
-        if target is None:
-            raise ValueError(f"Station {name} not found!")
-
-        # print(f"Target: {repr(target)}")
-        return (target["number"], target["meta"])
-
     def findOffers(self, station_from, station_to, day: datetime.date, passengers):
         (station_from_id, _) = self.findStationId(station_from)
         (station_to_id, _) = self.findStationId(station_to)
 
-        (station_from_id_meta, _) = self.findStationIdMeta(station_from)
-        (station_to_id_meta, _) = self.findStationIdMeta(station_to)
+        (station_from_id_meta, _) = self.findStationId(station_from, True)
+        (station_to_id_meta, _) = self.findStationId(station_to, True)
 
         fmt_date = day.strftime("%Y-%m-%d")
         url_prefix = f"{self.API_URL_BASE}/connection"
@@ -366,10 +357,8 @@ class Passenger:
         }
 
 
-FE = Passenger(Gender.MALE, AgeGroup.SMALL_KID_0_5, [])
-LI = Passenger(Gender.MALE, AgeGroup.SMALL_KID_0_5, [])
-MY = Passenger(Gender.FEMALE, AgeGroup.ADULT_15_99, [ReductionCard.DB_BAHNCARD_25_2KL])
-MA = Passenger(Gender.MALE, AgeGroup.ADULT_15_99, [ReductionCard.DB_BAHNCARD_25_2KL])
+PER1 = Passenger(Gender.FEMALE, AgeGroup.ADULT_15_99, [ReductionCard.KLIMATICKET])
+PER2 = Passenger(Gender.MALE, AgeGroup.ADULT_15_99, [ReductionCard.KLIMATICKET])
 
 
 @dataclass
@@ -391,26 +380,12 @@ class Connection:
 
 CONNECTIONS = [
     Connection(
-        station_from="Paris",
-        station_to="Berlin",
-        date_start=date(2025, 4, 14),
-        advance_days=4,
-        passengers=[MA, LI, FE],
-    ),
-    Connection(
-        station_from="Berlin",
-        station_to="Paris",
-        date_start=date(2025, 4, 27),
-        advance_days=2,
-        passengers=[MY],
-    ),
-    Connection(
-        station_from="Paris",
-        station_to="Berlin",
+        station_from="Wien",
+        station_to="Hannover",
         date_start=date(2025, 4, 1),
-        advance_days=3,
-        passengers=[MY],
-    ),
+        advance_days=90,
+        passengers=[PER1, PER2],
+    )
 ]
 
 
