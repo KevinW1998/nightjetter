@@ -96,23 +96,49 @@ class Nightjetter:
         # print(f"Target: {repr(target)}")
         return (target["number"], target["name"])
 
+    def findStationIdMeta(self, name):
+        # Parameter t was added, probably expects realistic since_epoch timestamp
+        # but for now works with whatever value
+        stations = self.__session.get(
+            f"{self.API_URL_BASE}/stations/find?lang=de&country=at&name={name}&t=1"
+        )
+        stations_json = stations.json()
+
+        # find first meta
+        target = None
+        for station in stations_json:
+            if station["meta"]:
+                target = station
+                break
+
+        if target is None:
+            raise ValueError(f"Station {name} not found!")
+
+        # print(f"Target: {repr(target)}")
+        return (target["number"], target["meta"])
+
     def findOffers(self, station_from, station_to, day: datetime.date, passengers):
         (station_from_id, _) = self.findStationId(station_from)
         (station_to_id, _) = self.findStationId(station_to)
 
-        fmt_date = day.strftime("%d%m%Y")
-        url_prefix = f"{self.API_URL_BASE}/connection/find"
-        url_suffix = "00:00?skip=0&limit=1&backward=false&lang=de"
+        (station_from_id_meta, _) = self.findStationIdMeta(station_from)
+        (station_to_id_meta, _) = self.findStationIdMeta(station_to)
+
+        fmt_date = day.strftime("%Y-%m-%d")
+        url_prefix = f"{self.API_URL_BASE}/connection"
+        # url_suffix = "00:00?skip=0&limit=1&backward=false&lang=de"
+        # conn = f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}"
         connections = self.__session.get(
-            f"{url_prefix}/{station_from_id}/{station_to_id}/{fmt_date}/{url_suffix}"
+            f"{url_prefix}/{station_from_id_meta}/{station_to_id_meta}/{fmt_date}"
         )
         connections_json = connections.json()
-        connections_results = connections_json["results"]
+        connections_results = connections_json["connections"]
         if len(connections_results) <= 0:
             return None
         first_connection_result = connections_results[0]
-        target_train = first_connection_result["train"]
-        departure_time = first_connection_result["from"]["dep_dt"]
+        target_train = first_connection_result["trains"][0]
+        target_train_name = target_train["train"]
+        departure_time = target_train["departure"]["utc"]
         if datetime.fromtimestamp(departure_time / 1000).date() != day:
             return None
 
@@ -121,7 +147,7 @@ class Nightjetter:
             "njDep": departure_time,
             "njTo": station_to_id,
             "maxChanges": 0,
-            "filter": {"njTrain": target_train, "njDeparture": departure_time},
+            "filter": {"njTrain": target_train_name, "njDeparture": departure_time},
             "objects": passengers,
             "relations": [],
             "lang": "de",
@@ -367,21 +393,21 @@ CONNECTIONS = [
     Connection(
         station_from="Paris",
         station_to="Berlin",
-        date_start=date(2024, 4, 11),
+        date_start=date(2025, 4, 14),
         advance_days=4,
         passengers=[MA, LI, FE],
     ),
     Connection(
         station_from="Berlin",
         station_to="Paris",
-        date_start=date(2024, 3, 27),
+        date_start=date(2025, 4, 27),
         advance_days=2,
         passengers=[MY],
     ),
     Connection(
         station_from="Paris",
         station_to="Berlin",
-        date_start=date(2024, 4, 1),
+        date_start=date(2025, 4, 1),
         advance_days=3,
         passengers=[MY],
     ),
